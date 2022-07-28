@@ -3,7 +3,7 @@
 
 [tool.poetry]
 name = "kilroy-face-discord"
-version = "0.1.0"
+version = "0.2.0"
 description = "kilroy face for Discord 🎮"
 readme = "kilroy_face_discord/README.md"
 authors = ["kilroy <kilroymail@pm.me>"]
@@ -14,8 +14,11 @@ documentation = "https://kilroybot.github.io/kilroy-face-discord"
 packages = [{ include = "kilroy-face-discord", from = "kilroy_face_discord/src" }]
 
 [tool.poetry.dependencies]
-python = "^3.9"
-typer = { version = "^0.4", extras = ["all"] }
+python = ">=3.9,<3.11"
+typer = { version = "^0.6", extras = ["all"] }
+kilroy-face-server-py-sdk = "^0.3"
+hikari = "2.0.0.dev109"
+asyncstdlib = "^3.10"
 
 # dev
 
