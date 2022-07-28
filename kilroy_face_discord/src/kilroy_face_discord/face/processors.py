@@ -21,14 +21,12 @@ from kilroy_face_discord.utils import Deepcopyable
 
 
 class Processor(Configurable[StateType], Generic[StateType], ABC):
-    @staticmethod
     @abstractmethod
-    async def post(channel: TextableChannel, post: JSON) -> Message:
+    async def post(self, channel: TextableChannel, post: JSON) -> Message:
         pass
 
-    @staticmethod
     @abstractmethod
-    async def convert(message: Message) -> JSON:
+    async def convert(self, message: Message) -> JSON:
         pass
 
     @staticmethod
