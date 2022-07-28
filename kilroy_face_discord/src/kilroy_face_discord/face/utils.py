@@ -7,6 +7,8 @@ from typing import (
     Dict,
     Generic,
     Iterable,
+    Type,
+    TypeVar,
 )
 from uuid import uuid4
 
@@ -19,6 +21,8 @@ from kilroy_face_discord.errors import (
 )
 from kilroy_face_discord.face.parameters import Parameter
 from kilroy_face_discord.types import StateType
+
+T = TypeVar("T")
 
 
 class Observable(ABC):
@@ -60,9 +64,19 @@ class Loadable(Observable, Generic[StateType], ABC):
         super().__init__()
         self.__ready = False
 
-    async def _initialize_state(self, state: StateType) -> None:
-        self.__state = state
+    @classmethod
+    async def build(cls: Type[T], *args, **kwargs) -> T:
+        instance = cls()
+        await instance.__ainit__(*args, **kwargs)
+        return instance
+
+    async def __ainit__(self, *args, **kwargs) -> None:
+        self.__state = await self._create_initial_state(*args, **kwargs)
         await self._set_ready(True)
+
+    @abstractmethod
+    async def _create_initial_state(self, *args, **kwargs) -> StateType:
+        pass
 
     async def cleanup(self) -> None:
         await self._destroy_state(self.__state)
@@ -90,12 +104,10 @@ class Loadable(Observable, Generic[StateType], ABC):
         return self.__state
 
     @staticmethod
-    @abstractmethod
     async def _copy_state(state: StateType) -> StateType:
-        pass
+        return await state.__adeepcopy__()
 
     @staticmethod
-    @abstractmethod
     async def _destroy_state(state: StateType) -> None:
         pass
 
@@ -109,19 +121,18 @@ class Loadable(Observable, Generic[StateType], ABC):
 
 class Configurable(Loadable[StateType], Generic[StateType], ABC):
     async def get_config(self) -> JSON:
+        params = self._parameters_mapping(self._state)
         return {
             name: await parameter.get(self._state)
-            for name, parameter in self._parameters_mapping.items()
+            for name, parameter in params.items()
         }
 
     async def set_config(self, config: JSON) -> JSON:
-        if set(config.keys()) != set(self._parameters_mapping.keys()):
-            raise INVALID_CONFIG_ERROR
-
         async with self._loading() as state:
+            params = self._parameters_mapping(state)
             for name, value in config.items():
                 try:
-                    await self._parameters_mapping[name].set(state, value)
+                    await params[name].set(state, value)
                 except Exception as e:
                     raise INVALID_CONFIG_ERROR from e
 
@@ -134,30 +145,36 @@ class Configurable(Loadable[StateType], Generic[StateType], ABC):
             yield config
 
     @property
-    def config_schema(self) -> JSONSchema:
+    def config_json_schema(self) -> JSONSchema:
         return JSONSchema(
             {
                 "title": "Face config schema",
                 "type": "object",
-                "properties": {
-                    name: parameter.schema
-                    for name, parameter in self._parameters_mapping.items()
-                },
+                "properties": self.config_properties_schema,
             }
         )
 
     @property
-    def config_ui_schema(self) -> JSON:
+    def config_properties_schema(self) -> JSON:
+        params = self._parameters_mapping(self._state)
         return {
-            name: parameter.ui_schema
-            for name, parameter in self._parameters_mapping.items()
+            name: parameter.schema(self._state)
+            for name, parameter in params.items()
         }
 
     @property
-    def _parameters_mapping(self) -> Dict[str, Parameter]:
-        return {parameter.name: parameter for parameter in self._parameters}
+    def config_ui_schema(self) -> JSON:
+        params = self._parameters_mapping(self._state)
+        return {
+            name: parameter.ui_schema(self._state)
+            for name, parameter in params.items()
+        }
+
+    def _parameters_mapping(self, state: StateType) -> Dict[str, Parameter]:
+        return {
+            parameter.name(state): parameter for parameter in self._parameters
+        }
 
     @property
-    @abstractmethod
     def _parameters(self) -> Iterable[Parameter]:
-        pass
+        return []

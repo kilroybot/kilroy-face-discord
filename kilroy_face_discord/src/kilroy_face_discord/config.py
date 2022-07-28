@@ -1,4 +1,5 @@
 import os
+from typing import Any, Dict
 
 from pydantic import BaseModel
 
@@ -9,8 +10,11 @@ class FaceConfig(BaseModel):
     token: str
     channel_id: int
     post_type: PostType
+    processor_config: Dict[str, Any] = {}
     scoring_type: ScoringType
+    scorer_config: Dict[str, Any] = {}
     scraping_type: ScrapingType
+    scraper_config: Dict[str, Any] = {}
 
     @classmethod
     def build(cls, **kwargs) -> "FaceConfig":

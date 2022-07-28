@@ -44,16 +44,13 @@ class Parameter(ABC, Generic[StateType, ParameterType]):
     ) -> None:
         pass
 
-    @property
     @abstractmethod
-    def name(self) -> str:
+    def name(self, state: StateType) -> str:
         pass
 
-    @property
     @abstractmethod
-    def schema(self) -> JSON:
+    def schema(self, state: StateType) -> JSON:
         pass
 
-    @property
-    def ui_schema(self) -> JSON:
+    def ui_schema(self, state: StateType) -> JSON:
         return {}
