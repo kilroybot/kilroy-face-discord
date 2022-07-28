@@ -28,7 +28,7 @@ class DiscordController(FaceController):
         self._face = face
 
     async def post_schema(self) -> PostSchema:
-        return PostSchema(post_schema=self._face.post_schema)
+        return PostSchema(post_schema=self._face.post_json_schema)
 
     async def status(self) -> Status:
         ready = await self._face.is_ready()
@@ -48,7 +48,7 @@ class DiscordController(FaceController):
 
     async def config_schema(self) -> ConfigSchema:
         return ConfigSchema(
-            config_schema=self._face.config_schema,
+            config_schema=self._face.config_json_schema,
             ui_schema=self._face.config_ui_schema,
         )
 

@@ -1,12 +1,14 @@
 import json
 from abc import ABC, abstractmethod
 from base64 import urlsafe_b64decode, urlsafe_b64encode
-from typing import Type
+from dataclasses import dataclass
+from typing import Generic, Type
 
 from hikari import Bytes, Message, TextableChannel
 from kilroy_face_server_py_sdk import JSONSchema
 from kilroy_ws_server_py_sdk import JSON
 
+from kilroy_face_discord.face.utils import Configurable
 from kilroy_face_discord.posts import (
     ImageData,
     ImageOnlyPost,
@@ -14,10 +16,11 @@ from kilroy_face_discord.posts import (
     TextData,
     TextOnlyPost,
 )
-from kilroy_face_discord.types import PostType
+from kilroy_face_discord.types import PostType, StateType
+from kilroy_face_discord.utils import Deepcopyable
 
 
-class Processor(ABC):
+class Processor(Configurable[StateType], Generic[StateType], ABC):
     @staticmethod
     @abstractmethod
     async def post(channel: TextableChannel, post: JSON) -> Message:
@@ -46,7 +49,15 @@ class Processor(ABC):
         raise ValueError(f'Processor for type "{post_type}" not found.')
 
 
-class TextOnlyProcessor(Processor):
+# Text only
+
+
+@dataclass
+class TextOnlyProcessorState(Deepcopyable):
+    pass
+
+
+class TextOnlyProcessor(Processor[TextOnlyProcessorState]):
     @staticmethod
     def post_type() -> PostType:
         return "text"
@@ -55,18 +66,27 @@ class TextOnlyProcessor(Processor):
     def post_schema() -> JSONSchema:
         return JSONSchema(TextOnlyPost.schema())
 
-    @staticmethod
-    async def post(channel: TextableChannel, post: JSON) -> Message:
+    async def _create_initial_state(self) -> TextOnlyProcessorState:
+        return TextOnlyProcessorState()
+
+    async def post(self, channel: TextableChannel, post: JSON) -> Message:
         post = TextOnlyPost.parse_obj(post)
         return await channel.send(post.text.content)
 
-    @staticmethod
-    async def convert(message: Message) -> JSON:
+    async def convert(self, message: Message) -> JSON:
         post = TextOnlyPost(text=TextData(content=message.content or ""))
         return json.loads(post.json())
 
 
-class ImageOnlyProcessor(Processor):
+# Image only
+
+
+@dataclass
+class ImageOnlyProcessorState(Deepcopyable):
+    pass
+
+
+class ImageOnlyProcessor(Processor[ImageOnlyProcessorState]):
     @staticmethod
     def post_type() -> PostType:
         return "image"
@@ -75,8 +95,10 @@ class ImageOnlyProcessor(Processor):
     def post_schema() -> JSONSchema:
         return JSONSchema(ImageOnlyPost.schema())
 
-    @staticmethod
-    async def post(channel: TextableChannel, post: JSON) -> Message:
+    async def _create_initial_state(self) -> ImageOnlyProcessorState:
+        return ImageOnlyProcessorState()
+
+    async def post(self, channel: TextableChannel, post: JSON) -> Message:
         post = ImageOnlyPost.parse_obj(post)
         return await channel.send(
             Bytes(
@@ -85,8 +107,7 @@ class ImageOnlyProcessor(Processor):
             )
         )
 
-    @staticmethod
-    async def convert(message: Message) -> JSON:
+    async def convert(self, message: Message) -> JSON:
         attachment = message.attachments[0]
         image_bytes = await attachment.read()
         encoded_image_bytes = urlsafe_b64encode(image_bytes).decode("ascii")
@@ -98,7 +119,15 @@ class ImageOnlyProcessor(Processor):
         return json.loads(post.json())
 
 
-class TextAndImageProcessor(Processor):
+# Text + image
+
+
+@dataclass
+class TextAndImageProcessorState(Deepcopyable):
+    pass
+
+
+class TextAndImageProcessor(Processor[TextAndImageProcessorState]):
     @staticmethod
     def post_type() -> PostType:
         return "text+image"
@@ -107,8 +136,10 @@ class TextAndImageProcessor(Processor):
     def post_schema() -> JSONSchema:
         return JSONSchema(TextAndImagePost.schema())
 
-    @staticmethod
-    async def post(channel: TextableChannel, post: JSON) -> Message:
+    async def _create_initial_state(self) -> TextAndImageProcessorState:
+        return TextAndImageProcessorState()
+
+    async def post(self, channel: TextableChannel, post: JSON) -> Message:
         post = TextAndImagePost.parse_obj(post)
         return await channel.send(
             post.text.content,
@@ -118,8 +149,7 @@ class TextAndImageProcessor(Processor):
             ),
         )
 
-    @staticmethod
-    async def convert(message: Message) -> JSON:
+    async def convert(self, message: Message) -> JSON:
         attachment = message.attachments[0]
         image_bytes = await attachment.read()
         encoded_image_bytes = urlsafe_b64encode(image_bytes).decode("ascii")

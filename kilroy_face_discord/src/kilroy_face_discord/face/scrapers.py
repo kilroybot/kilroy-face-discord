@@ -1,16 +1,19 @@
 from abc import ABC, abstractmethod
+from dataclasses import dataclass
 from datetime import datetime
-from typing import AsyncIterable, Optional, Type
+from typing import AsyncIterable, Generic, Optional, Type
 
 from hikari import Message, TextableChannel, UNDEFINED
 
-from kilroy_face_discord.types import ScrapingType
+from kilroy_face_discord.face.utils import Configurable
+from kilroy_face_discord.types import ScrapingType, StateType
+from kilroy_face_discord.utils import Deepcopyable
 
 
-class Scraper(ABC):
-    @staticmethod
+class Scraper(Configurable[StateType], Generic[StateType], ABC):
     @abstractmethod
     def scrap(
+        self,
         channel: TextableChannel,
         before: Optional[datetime] = None,
         after: Optional[datetime] = None,
@@ -30,9 +33,17 @@ class Scraper(ABC):
         raise ValueError(f'Scraper for type "{scraping_type}" not found.')
 
 
-class BasicScraper(Scraper):
-    @staticmethod
+# Basic
+
+
+@dataclass
+class BasicScraperState(Deepcopyable):
+    pass
+
+
+class BasicScraper(Scraper[BasicScraperState]):
     async def scrap(
+        self,
         channel: TextableChannel,
         before: Optional[datetime] = None,
         after: Optional[datetime] = None,
@@ -47,3 +58,6 @@ class BasicScraper(Scraper):
     @staticmethod
     def scraping_type() -> ScrapingType:
         return "basic"
+
+    async def _create_initial_state(self) -> BasicScraperState:
+        return BasicScraperState()

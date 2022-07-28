@@ -1,15 +1,17 @@
 from abc import ABC, abstractmethod
-from typing import Type
+from dataclasses import dataclass
+from typing import Generic, Type
 
 from hikari import Message
 
-from kilroy_face_discord.types import ScoringType
+from kilroy_face_discord.face.utils import Configurable
+from kilroy_face_discord.types import ScoringType, StateType
+from kilroy_face_discord.utils import Deepcopyable
 
 
-class Scorer(ABC):
-    @staticmethod
+class Scorer(Configurable[StateType], Generic[StateType], ABC):
     @abstractmethod
-    async def score(message: Message) -> float:
+    async def score(self, message: Message) -> float:
         pass
 
     @staticmethod
@@ -25,11 +27,21 @@ class Scorer(ABC):
         raise ValueError(f'Scorer for type "{scoring_type}" not found.')
 
 
-class ReactionsScorer(Scorer):
-    @staticmethod
-    async def score(message: Message) -> float:
+# Reactions
+
+
+@dataclass
+class ReactionsScorerState(Deepcopyable):
+    pass
+
+
+class ReactionsScorer(Scorer[ReactionsScorerState]):
+    async def score(self, message: Message) -> float:
         return sum(reaction.count for reaction in message.reactions)
 
     @staticmethod
     def scoring_type() -> ScoringType:
         return "reactions"
+
+    async def _create_initial_state(self) -> ReactionsScorerState:
+        return ReactionsScorerState()
