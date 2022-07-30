@@ -19,7 +19,7 @@ class TextData(BasePostModel):
 
 class ImageData(BasePostModel):
     raw: str
-    filename: str = "image"
+    filename: str
 
 
 class BasePost(BasePostModel, ABC):
