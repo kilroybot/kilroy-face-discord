@@ -19,12 +19,17 @@ class FaceConfig(BaseModel):
     @classmethod
     def build(cls, **kwargs) -> "FaceConfig":
         return cls(
-            token=kwargs.get("token", os.getenv("KILROY_FACE_DISCORD_TOKEN")),
+            token=kwargs.get(
+                "token",
+                os.getenv("KILROY_FACE_DISCORD_TOKEN"),
+            ),
             channel_id=kwargs.get(
-                "channel_id", os.getenv("KILROY_FACE_DISCORD_CHANNEL_ID")
+                "channel_id",
+                os.getenv("KILROY_FACE_DISCORD_CHANNEL_ID"),
             ),
             post_type=kwargs.get(
-                "post_type", os.getenv("KILROY_FACE_DISCORD_POST_TYPE", "text")
+                "post_type",
+                os.getenv("KILROY_FACE_DISCORD_POST_TYPE", "text"),
             ),
             scoring_type=kwargs.get(
                 "scoring_type",
@@ -45,9 +50,11 @@ class ServerConfig(BaseModel):
     def build(cls, **kwargs) -> "ServerConfig":
         return cls(
             host=kwargs.get(
-                "host", os.getenv("KILROY_FACE_DISCORD_HOST", "localhost")
+                "host",
+                os.getenv("KILROY_FACE_DISCORD_HOST", "localhost"),
             ),
             port=kwargs.get(
-                "port", os.getenv("KILROY_FACE_DISCORD_PORT", 10000)
+                "port",
+                os.getenv("KILROY_FACE_DISCORD_PORT", 10000),
             ),
         )
