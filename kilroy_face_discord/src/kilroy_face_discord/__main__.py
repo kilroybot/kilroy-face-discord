@@ -9,10 +9,9 @@ from enum import Enum
 from logging import Logger
 
 import typer
-from kilroy_ws_server_py_sdk import Server
+from kilroy_face_server_py_sdk import FaceServer
 
 from kilroy_face_discord.config import FaceConfig, ServerConfig
-from kilroy_face_discord.controller import DiscordController
 from kilroy_face_discord.face import DiscordFace
 
 cli = typer.Typer()  # this is actually callable and thus can be an entry point
@@ -37,8 +36,7 @@ async def run(
     face_config: FaceConfig, server_config: ServerConfig, logger: Logger
 ) -> None:
     face = await DiscordFace.build(face_config)
-    controller = DiscordController(face)
-    server = Server(controller, logger)
+    server = FaceServer(face, logger)
     await server.run(**server_config.dict())
 
 

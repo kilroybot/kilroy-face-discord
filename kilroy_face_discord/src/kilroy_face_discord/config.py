@@ -3,18 +3,16 @@ from typing import Any, Dict
 
 from pydantic import BaseModel
 
-from kilroy_face_discord.types import PostType, ScoringType, ScrapingType
-
 
 class FaceConfig(BaseModel):
     token: str
     channel_id: int
-    post_type: PostType
-    processor_config: Dict[str, Any] = {}
-    scoring_type: ScoringType
-    scorer_config: Dict[str, Any] = {}
-    scraping_type: ScrapingType
-    scraper_config: Dict[str, Any] = {}
+    post_type: str
+    processors_params: Dict[str, Dict[str, Any]] = {}
+    default_scoring_type: str
+    scorers_params: Dict[str, Dict[str, Any]] = {}
+    default_scraping_type: str
+    scrapers_params: Dict[str, Dict[str, Any]] = {}
 
     @classmethod
     def build(cls, **kwargs) -> "FaceConfig":
@@ -29,15 +27,24 @@ class FaceConfig(BaseModel):
             ),
             post_type=kwargs.get(
                 "post_type",
-                os.getenv("KILROY_FACE_DISCORD_POST_TYPE", "text"),
+                os.getenv(
+                    "KILROY_FACE_DISCORD_POST_TYPE",
+                    "text-or-image",
+                ),
             ),
-            scoring_type=kwargs.get(
+            default_scoring_type=kwargs.get(
                 "scoring_type",
-                os.getenv("KILROY_FACE_DISCORD_SCORING_TYPE", "reactions"),
+                os.getenv(
+                    "KILROY_FACE_DISCORD_DEFAULT_SCORING_TYPE",
+                    "reactions",
+                ),
             ),
-            scraping_type=kwargs.get(
+            default_scraping_type=kwargs.get(
                 "scraping_type",
-                os.getenv("KILROY_FACE_DISCORD_SCRAPING_TYPE", "basic"),
+                os.getenv(
+                    "KILROY_FACE_DISCORD_DEFAULT_SCRAPING_TYPE",
+                    "basic",
+                ),
             ),
         )
 
@@ -51,10 +58,16 @@ class ServerConfig(BaseModel):
         return cls(
             host=kwargs.get(
                 "host",
-                os.getenv("KILROY_FACE_DISCORD_HOST", "localhost"),
+                os.getenv(
+                    "KILROY_FACE_DISCORD_HOST",
+                    "localhost",
+                ),
             ),
             port=kwargs.get(
                 "port",
-                os.getenv("KILROY_FACE_DISCORD_PORT", 10000),
+                os.getenv(
+                    "KILROY_FACE_DISCORD_PORT",
+                    10000,
+                ),
             ),
         )
