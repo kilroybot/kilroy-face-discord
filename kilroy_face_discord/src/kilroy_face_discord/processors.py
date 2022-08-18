@@ -1,33 +1,26 @@
 import json
 from abc import ABC, abstractmethod
 from base64 import urlsafe_b64decode, urlsafe_b64encode
-from dataclasses import dataclass
-from typing import Generic, Iterable, Optional
+from typing import Any, Dict, Optional
 from uuid import UUID
 
 from hikari import Bytes, Message, TextableChannel
 from kilroy_face_server_py_sdk import (
-    BasePostModel,
-    BaseState,
     Categorizable,
-    ConfigurableWithLoadableState,
+    Configurable,
     ImageData,
     ImageOnlyPost,
     ImageWithOptionalTextPost,
-    JSON,
     JSONSchema,
-    Parameter,
-    StateType,
+    SerializableState,
     TextAndImagePost,
     TextData,
     TextOnlyPost,
     TextOrImagePost,
     TextWithOptionalImagePost,
+    classproperty,
+    normalize,
 )
-
-
-def to_json(post: BasePostModel) -> JSON:
-    return json.loads(post.json())
 
 
 async def send_message(channel: TextableChannel, *args, **kwargs) -> UUID:
@@ -57,152 +50,120 @@ def image_to_bytes(image: ImageData) -> Bytes:
     )
 
 
-class Processor(
-    ConfigurableWithLoadableState[StateType],
-    Categorizable,
-    Generic[StateType],
-    ABC,
-):
+class Processor(Categorizable, ABC):
+    @classproperty
+    def category(cls) -> str:
+        name: str = cls.__name__
+        return normalize(name.removesuffix("Processor"))
+
     @abstractmethod
-    async def post(self, channel: TextableChannel, post: JSON) -> UUID:
+    async def post(
+        self, channel: TextableChannel, post: Dict[str, Any]
+    ) -> UUID:
         pass
 
     @abstractmethod
-    async def convert(self, message: Message) -> JSON:
+    async def convert(self, message: Message) -> Dict[str, Any]:
         pass
 
-    @staticmethod
+    @classproperty
     @abstractmethod
-    def post_schema() -> JSONSchema:
+    def post_schema(cls) -> JSONSchema:
         pass
 
 
 # Text only
 
 
-@dataclass
-class TextOnlyProcessorState(BaseState):
+class TextOnlyProcessorState(SerializableState):
     pass
 
 
-class TextOnlyProcessor(Processor[TextOnlyProcessorState]):
-    @classmethod
-    def category(cls) -> str:
-        return "text"
+class TextOnlyProcessor(Processor, Configurable[TextOnlyProcessorState]):
+    @classproperty
+    def post_schema(cls) -> JSONSchema:
+        return JSONSchema(**TextOnlyPost.schema())
 
-    @staticmethod
-    def post_schema() -> JSONSchema:
-        return JSONSchema(TextOnlyPost.schema())
-
-    async def _create_initial_state(self) -> TextOnlyProcessorState:
-        return TextOnlyProcessorState()
-
-    async def _get_parameters(self) -> Iterable[Parameter]:
-        return []
-
-    async def post(self, channel: TextableChannel, post: JSON) -> UUID:
+    async def post(
+        self, channel: TextableChannel, post: Dict[str, Any]
+    ) -> UUID:
         post = TextOnlyPost.parse_obj(post)
         return await send_message(channel, post.text.content)
 
-    async def convert(self, message: Message) -> JSON:
+    async def convert(self, message: Message) -> Dict[str, Any]:
         text = await get_text_data(message)
         post = TextOnlyPost(text=text)
-        return to_json(post)
+        return json.loads(post.json())
 
 
 # Image only
 
 
-@dataclass
-class ImageOnlyProcessorState(BaseState):
+class ImageOnlyProcessorState(SerializableState):
     pass
 
 
-class ImageOnlyProcessor(Processor[ImageOnlyProcessorState]):
-    @classmethod
-    def category(cls) -> str:
-        return "image"
+class ImageOnlyProcessor(Processor, Configurable[ImageOnlyProcessorState]):
+    @classproperty
+    def post_schema(cls) -> JSONSchema:
+        return JSONSchema(**ImageOnlyPost.schema())
 
-    @staticmethod
-    def post_schema() -> JSONSchema:
-        return JSONSchema(ImageOnlyPost.schema())
-
-    async def _create_initial_state(self) -> ImageOnlyProcessorState:
-        return ImageOnlyProcessorState()
-
-    async def _get_parameters(self) -> Iterable[Parameter]:
-        return []
-
-    async def post(self, channel: TextableChannel, post: JSON) -> UUID:
+    async def post(
+        self, channel: TextableChannel, post: Dict[str, Any]
+    ) -> UUID:
         post = ImageOnlyPost.parse_obj(post)
         image = image_to_bytes(post.image)
         return await send_message(channel, image)
 
-    async def convert(self, message: Message) -> JSON:
+    async def convert(self, message: Message) -> Dict[str, Any]:
         image = await get_image_data(message)
         post = ImageOnlyPost(image=image)
-        return to_json(post)
+        return json.loads(post.json())
 
 
 # Text and image
 
 
-@dataclass
-class TextAndImageProcessorState(BaseState):
+class TextAndImageProcessorState(SerializableState):
     pass
 
 
-class TextAndImageProcessor(Processor[TextAndImageProcessorState]):
-    @classmethod
-    def category(cls) -> str:
-        return "text-and-image"
+class TextAndImageProcessor(
+    Processor, Configurable[TextAndImageProcessorState]
+):
+    @classproperty
+    def post_schema(cls) -> JSONSchema:
+        return JSONSchema(**TextAndImagePost.schema())
 
-    @staticmethod
-    def post_schema() -> JSONSchema:
-        return JSONSchema(TextAndImagePost.schema())
-
-    async def _create_initial_state(self) -> TextAndImageProcessorState:
-        return TextAndImageProcessorState()
-
-    async def _get_parameters(self) -> Iterable[Parameter]:
-        return []
-
-    async def post(self, channel: TextableChannel, post: JSON) -> UUID:
+    async def post(
+        self, channel: TextableChannel, post: Dict[str, Any]
+    ) -> UUID:
         post = TextAndImagePost.parse_obj(post)
         image = image_to_bytes(post.image)
         return await send_message(channel, post.text.content, attachment=image)
 
-    async def convert(self, message: Message) -> JSON:
+    async def convert(self, message: Message) -> Dict[str, Any]:
         text = await get_text_data(message)
         image = await get_image_data(message)
         post = TextAndImagePost(text=text, image=image)
-        return to_json(post)
+        return json.loads(post.json())
 
 
 # Text or image
 
 
-@dataclass
-class TextOrImageProcessorState(BaseState):
+class TextOrImageProcessorState(SerializableState):
     pass
 
 
-class TextOrImageProcessor(Processor[TextOrImageProcessorState]):
-    @classmethod
-    def category(cls) -> str:
-        return "text-or-image"
+class TextOrImageProcessor(Processor, Configurable[TextOrImageProcessorState]):
+    @classproperty
+    def post_schema(cls) -> JSONSchema:
+        return JSONSchema(**TextOrImagePost.schema())
 
-    @staticmethod
-    def post_schema() -> JSONSchema:
-        return JSONSchema(TextOrImagePost.schema())
-
-    async def _create_initial_state(self) -> TextOrImageProcessorState:
-        return TextOrImageProcessorState()
-
-    async def _get_parameters(self) -> Iterable[Parameter]:
-        return []
-
-    async def post(self, channel: TextableChannel, post: JSON) -> UUID:
+    async def post(
+        self, channel: TextableChannel, post: Dict[str, Any]
+    ) -> UUID:
         post = TextOrImagePost.parse_obj(post)
         kwargs = {}
         if post.text is not None:
@@ -211,90 +172,68 @@ class TextOrImageProcessor(Processor[TextOrImageProcessorState]):
             kwargs["attachment"] = image_to_bytes(post.image)
         return await send_message(channel, **kwargs)
 
-    async def convert(self, message: Message) -> JSON:
+    async def convert(self, message: Message) -> Dict[str, Any]:
         text = await get_text_data(message)
         image = await get_image_data(message)
         post = TextOrImagePost(text=text, image=image)
-        return to_json(post)
+        return json.loads(post.json())
 
 
 # Text with optional image
 
 
-@dataclass
-class TextWithOptionalImageProcessorState(BaseState):
+class TextWithOptionalImageProcessorState(SerializableState):
     pass
 
 
 class TextWithOptionalImageProcessor(
-    Processor[TextWithOptionalImageProcessorState]
+    Processor, Configurable[TextWithOptionalImageProcessorState]
 ):
-    @classmethod
-    def category(cls) -> str:
-        return "text-with-optional-image"
+    @classproperty
+    def post_schema(cls) -> JSONSchema:
+        return JSONSchema(**TextWithOptionalImagePost.schema())
 
-    @staticmethod
-    def post_schema() -> JSONSchema:
-        return JSONSchema(TextWithOptionalImagePost.schema())
-
-    async def _create_initial_state(
-        self,
-    ) -> TextWithOptionalImageProcessorState:
-        return TextWithOptionalImageProcessorState()
-
-    async def _get_parameters(self) -> Iterable[Parameter]:
-        return []
-
-    async def post(self, channel: TextableChannel, post: JSON) -> UUID:
+    async def post(
+        self, channel: TextableChannel, post: Dict[str, Any]
+    ) -> UUID:
         post = TextWithOptionalImagePost.parse_obj(post)
         kwargs = {}
         if post.image is not None:
             kwargs["attachment"] = image_to_bytes(post.image)
         return await send_message(channel, post.text.content, **kwargs)
 
-    async def convert(self, message: Message) -> JSON:
+    async def convert(self, message: Message) -> Dict[str, Any]:
         text = await get_text_data(message)
         image = await get_image_data(message)
         post = TextWithOptionalImagePost(text=text, image=image)
-        return to_json(post)
+        return json.loads(post.json())
 
 
 # Image with optional text
 
 
-@dataclass
-class ImageWithOptionalTextProcessorState(BaseState):
+class ImageWithOptionalTextProcessorState(SerializableState):
     pass
 
 
-class ImageWithOptionalTextImageProcessor(
-    Processor[ImageWithOptionalTextProcessorState]
+class ImageWithOptionalTextProcessor(
+    Processor, Configurable[ImageWithOptionalTextProcessorState]
 ):
-    @classmethod
-    def category(cls) -> str:
-        return "image-with-optional-text"
+    @classproperty
+    def post_schema(cls) -> JSONSchema:
+        return JSONSchema(**ImageWithOptionalTextPost.schema())
 
-    @staticmethod
-    def post_schema() -> JSONSchema:
-        return JSONSchema(ImageWithOptionalTextPost.schema())
-
-    async def _create_initial_state(
-        self,
-    ) -> ImageWithOptionalTextProcessorState:
-        return ImageWithOptionalTextProcessorState()
-
-    async def _get_parameters(self) -> Iterable[Parameter]:
-        return []
-
-    async def post(self, channel: TextableChannel, post: JSON) -> UUID:
+    async def post(
+        self, channel: TextableChannel, post: Dict[str, Any]
+    ) -> UUID:
         post = ImageWithOptionalTextPost.parse_obj(post)
         kwargs = {}
         if post.image is not None:
             kwargs["attachment"] = image_to_bytes(post.image)
         return await send_message(channel, post.text.content, **kwargs)
 
-    async def convert(self, message: Message) -> JSON:
+    async def convert(self, message: Message) -> Dict[str, Any]:
         text = await get_text_data(message)
         image = await get_image_data(message)
         post = ImageWithOptionalTextPost(text=text, image=image)
-        return to_json(post)
+        return json.loads(post.json())

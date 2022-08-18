@@ -1,24 +1,23 @@
 from abc import ABC, abstractmethod
-from dataclasses import dataclass
 from datetime import datetime
-from typing import AsyncIterable, Generic, Iterable, Optional
+from typing import AsyncIterable, Optional
 
 from hikari import Message, TextableChannel, UNDEFINED
 from kilroy_face_server_py_sdk import (
-    BaseState,
     Categorizable,
-    ConfigurableWithLoadableState,
-    Parameter,
-    StateType,
+    Configurable,
+    SerializableState,
+    classproperty,
+    normalize,
 )
 
 
-class Scraper(
-    ConfigurableWithLoadableState[StateType],
-    Categorizable,
-    Generic[StateType],
-    ABC,
-):
+class Scraper(Categorizable, ABC):
+    @classproperty
+    def category(cls) -> str:
+        name: str = cls.__name__
+        return normalize(name.removesuffix("Scraper"))
+
     @abstractmethod
     def scrap(
         self,
@@ -32,22 +31,11 @@ class Scraper(
 # Basic
 
 
-@dataclass
-class BasicScraperState(BaseState):
+class BasicScraperState(SerializableState):
     pass
 
 
-class BasicScraper(Scraper[BasicScraperState]):
-    @classmethod
-    def category(cls) -> str:
-        return "basic"
-
-    async def _get_parameters(self) -> Iterable[Parameter]:
-        return []
-
-    async def _create_initial_state(self) -> BasicScraperState:
-        return BasicScraperState()
-
+class BasicScraper(Scraper, Configurable[BasicScraperState]):
     async def scrap(
         self,
         channel: TextableChannel,
