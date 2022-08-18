@@ -1,0 +1,9 @@
+postType: textOrImage
+face:
+  token: XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+  channelId: XXXXXXXXXXXXXXXXXX
+  scoringType: reactions
+  scrapingType: basic
+server:
+  host: localhost
+  port: 10000

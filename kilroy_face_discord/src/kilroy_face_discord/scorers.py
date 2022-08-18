@@ -1,23 +1,21 @@
 from abc import ABC, abstractmethod
-from dataclasses import dataclass
-from typing import Generic, Iterable
 
 from hikari import Message
 from kilroy_face_server_py_sdk import (
-    BaseState,
     Categorizable,
-    ConfigurableWithLoadableState,
-    Parameter,
-    StateType,
+    Configurable,
+    SerializableState,
+    classproperty,
+    normalize,
 )
 
 
-class Scorer(
-    ConfigurableWithLoadableState[StateType],
-    Categorizable,
-    Generic[StateType],
-    ABC,
-):
+class Scorer(Categorizable, ABC):
+    @classproperty
+    def category(cls) -> str:
+        name: str = cls.__name__
+        return normalize(name.removesuffix("Scorer"))
+
     @abstractmethod
     async def score(self, message: Message) -> float:
         pass
@@ -26,21 +24,10 @@ class Scorer(
 # Reactions
 
 
-@dataclass
-class ReactionsScorerState(BaseState):
+class ReactionsScorerState(SerializableState):
     pass
 
 
-class ReactionsScorer(Scorer[ReactionsScorerState]):
-    @classmethod
-    def category(cls) -> str:
-        return "reactions"
-
-    async def _get_parameters(self) -> Iterable[Parameter]:
-        return []
-
-    async def _create_initial_state(self) -> ReactionsScorerState:
-        return ReactionsScorerState()
-
+class ReactionsScorer(Scorer, Configurable[ReactionsScorerState]):
     async def score(self, message: Message) -> float:
         return sum(reaction.count for reaction in message.reactions)
