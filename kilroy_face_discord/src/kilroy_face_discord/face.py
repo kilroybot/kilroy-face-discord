@@ -5,6 +5,7 @@ from typing import Any, AsyncIterable, Dict, Optional, Set, Tuple
 from uuid import UUID
 
 from aiostream import stream
+from aiostream.aiter_utils import aiter, anext
 from hikari import Message, RESTApp, TextableChannel, TokenType
 from hikari.impl import RESTClientImpl
 from kilroy_face_server_py_sdk import (
@@ -67,8 +68,8 @@ class DiscordFace(Categorizable, Face[DiscordFaceState], ABC):
         name: str = cls.__name__
         return normalize(name.removesuffix("DiscordFace"))
 
-    @property
-    def metadata(self) -> Metadata:
+    @classproperty
+    def metadata(cls) -> Metadata:
         return Metadata(
             key="kilroy-face-discord", description="Kilroy face for Discord"
         )
@@ -77,9 +78,9 @@ class DiscordFace(Categorizable, Face[DiscordFaceState], ABC):
     def post_type(cls) -> str:
         return cls.category
 
-    @property
-    def post_schema(self) -> JSONSchema:
-        return Processor.for_category(self.post_type).post_schema
+    @classproperty
+    def post_schema(cls) -> JSONSchema:
+        return Processor.for_category(cls.post_type).post_schema
 
     @classproperty
     def parameters(cls) -> Set[Parameter]:
@@ -162,35 +163,47 @@ class DiscordFace(Categorizable, Face[DiscordFaceState], ABC):
             message = await state.channel.fetch_message(post_id.int)
             return await state.scorer.score(message)
 
+    async def _fetch(
+        self,
+        messages: AsyncIterable[Message],
+    ) -> AsyncIterable[Tuple[UUID, Dict[str, Any], float]]:
+        messages = aiter(messages)
+
+        while True:
+            async with self.state.read_lock() as state:
+                try:
+                    message = await anext(messages)
+                except StopAsyncIteration:
+                    break
+
+                post_id = UUID(int=message.id)
+                score = await state.scorer.score(message)
+
+                try:
+                    post = await state.processor.convert(message)
+                except Exception:
+                    continue
+
+                yield post_id, post, score
+
     async def scrap(
         self,
         limit: Optional[int] = None,
         before: Optional[datetime] = None,
         after: Optional[datetime] = None,
-    ) -> AsyncIterable[Tuple[UUID, Dict[str, Any]]]:
-        state = await self.state.value.fetch()
+    ) -> AsyncIterable[Tuple[UUID, Dict[str, Any], float]]:
+        async with self.state.read_lock() as state:
+            messages = state.scraper.scrap(state.channel, before, after)
 
-        async def fetch(
-            msgs: AsyncIterable[Message], processor: Processor
-        ) -> AsyncIterable[Tuple[UUID, Dict[str, Any]]]:
-            async for message in msgs:
-                uuid = UUID(int=message.id)
-                try:
-                    post = await processor.convert(message)
-                except Exception:
-                    continue
-                yield uuid, post
-
-        messages = state.scraper.scrap(state.channel, before, after)
-        posts = fetch(messages, state.processor)
+        posts = self._fetch(messages)
         if limit is not None:
             posts = stream.take(posts, limit)
         else:
             posts = stream.iterate(posts)
 
         async with posts.stream() as streamer:
-            async for post_id, post in streamer:
-                yield post_id, post
+            async for post_id, post, score in streamer:
+                yield post_id, post, score
 
 
 class TextOnlyDiscordFace(DiscordFace):
