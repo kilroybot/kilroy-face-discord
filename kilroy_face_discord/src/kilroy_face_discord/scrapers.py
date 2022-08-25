@@ -3,13 +3,7 @@ from datetime import datetime
 from typing import AsyncIterable, Optional
 
 from hikari import Message, TextableChannel, UNDEFINED
-from kilroy_face_server_py_sdk import (
-    Categorizable,
-    Configurable,
-    SerializableState,
-    classproperty,
-    normalize,
-)
+from kilroy_face_server_py_sdk import Categorizable, classproperty, normalize
 
 
 class Scraper(Categorizable, ABC):
@@ -31,11 +25,7 @@ class Scraper(Categorizable, ABC):
 # Basic
 
 
-class BasicScraperState(SerializableState):
-    pass
-
-
-class BasicScraper(Scraper, Configurable[BasicScraperState]):
+class BasicScraper(Scraper):
     async def scrap(
         self,
         channel: TextableChannel,

@@ -1,13 +1,7 @@
 from abc import ABC, abstractmethod
 
 from hikari import Message
-from kilroy_face_server_py_sdk import (
-    Categorizable,
-    Configurable,
-    SerializableState,
-    classproperty,
-    normalize,
-)
+from kilroy_face_server_py_sdk import Categorizable, classproperty, normalize
 
 
 class Scorer(Categorizable, ABC):
@@ -24,10 +18,6 @@ class Scorer(Categorizable, ABC):
 # Reactions
 
 
-class ReactionsScorerState(SerializableState):
-    pass
-
-
-class ReactionsScorer(Scorer, Configurable[ReactionsScorerState]):
+class ReactionsScorer(Scorer):
     async def score(self, message: Message) -> float:
         return sum(reaction.count for reaction in message.reactions)
