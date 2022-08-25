@@ -1,9 +1,9 @@
-postType: textOrImage
-face:
+faceType: textOrImage
+faceParams:
   token: XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
   channelId: XXXXXXXXXXXXXXXXXX
   scoringType: reactions
   scrapingType: basic
-server:
+serverParams:
   host: localhost
   port: 10000

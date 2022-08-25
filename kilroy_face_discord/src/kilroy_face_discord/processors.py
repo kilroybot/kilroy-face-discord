@@ -7,12 +7,10 @@ from uuid import UUID
 from hikari import Bytes, Message, TextableChannel
 from kilroy_face_server_py_sdk import (
     Categorizable,
-    Configurable,
     ImageData,
     ImageOnlyPost,
     ImageWithOptionalTextPost,
     JSONSchema,
-    SerializableState,
     TextAndImagePost,
     TextData,
     TextOnlyPost,
@@ -75,11 +73,7 @@ class Processor(Categorizable, ABC):
 # Text only
 
 
-class TextOnlyProcessorState(SerializableState):
-    pass
-
-
-class TextOnlyProcessor(Processor, Configurable[TextOnlyProcessorState]):
+class TextOnlyProcessor(Processor):
     @classproperty
     def post_schema(cls) -> JSONSchema:
         return JSONSchema(**TextOnlyPost.schema())
@@ -99,11 +93,7 @@ class TextOnlyProcessor(Processor, Configurable[TextOnlyProcessorState]):
 # Image only
 
 
-class ImageOnlyProcessorState(SerializableState):
-    pass
-
-
-class ImageOnlyProcessor(Processor, Configurable[ImageOnlyProcessorState]):
+class ImageOnlyProcessor(Processor):
     @classproperty
     def post_schema(cls) -> JSONSchema:
         return JSONSchema(**ImageOnlyPost.schema())
@@ -124,13 +114,7 @@ class ImageOnlyProcessor(Processor, Configurable[ImageOnlyProcessorState]):
 # Text and image
 
 
-class TextAndImageProcessorState(SerializableState):
-    pass
-
-
-class TextAndImageProcessor(
-    Processor, Configurable[TextAndImageProcessorState]
-):
+class TextAndImageProcessor(Processor):
     @classproperty
     def post_schema(cls) -> JSONSchema:
         return JSONSchema(**TextAndImagePost.schema())
@@ -152,11 +136,7 @@ class TextAndImageProcessor(
 # Text or image
 
 
-class TextOrImageProcessorState(SerializableState):
-    pass
-
-
-class TextOrImageProcessor(Processor, Configurable[TextOrImageProcessorState]):
+class TextOrImageProcessor(Processor):
     @classproperty
     def post_schema(cls) -> JSONSchema:
         return JSONSchema(**TextOrImagePost.schema())
@@ -182,13 +162,7 @@ class TextOrImageProcessor(Processor, Configurable[TextOrImageProcessorState]):
 # Text with optional image
 
 
-class TextWithOptionalImageProcessorState(SerializableState):
-    pass
-
-
-class TextWithOptionalImageProcessor(
-    Processor, Configurable[TextWithOptionalImageProcessorState]
-):
+class TextWithOptionalImageProcessor(Processor):
     @classproperty
     def post_schema(cls) -> JSONSchema:
         return JSONSchema(**TextWithOptionalImagePost.schema())
@@ -212,13 +186,7 @@ class TextWithOptionalImageProcessor(
 # Image with optional text
 
 
-class ImageWithOptionalTextProcessorState(SerializableState):
-    pass
-
-
-class ImageWithOptionalTextProcessor(
-    Processor, Configurable[ImageWithOptionalTextProcessorState]
-):
+class ImageWithOptionalTextProcessor(Processor):
     @classproperty
     def post_schema(cls) -> JSONSchema:
         return JSONSchema(**ImageWithOptionalTextPost.schema())

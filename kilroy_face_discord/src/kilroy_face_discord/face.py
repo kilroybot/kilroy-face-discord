@@ -1,41 +1,26 @@
-from abc import ABC, abstractmethod
+from abc import ABC
 from dataclasses import dataclass
 from datetime import datetime
-from typing import (
-    Any,
-    AsyncIterable,
-    Dict,
-    Optional,
-    Set,
-    Tuple,
-)
+from typing import Any, AsyncIterable, Dict, Optional, Set, Tuple
 from uuid import UUID
 
 from aiostream import stream
 from hikari import Message, RESTApp, TextableChannel, TokenType
 from hikari.impl import RESTClientImpl
 from kilroy_face_server_py_sdk import (
+    Categorizable,
     CategorizableBasedParameter,
     Configurable,
     Face,
     JSONSchema,
     Metadata,
-    NestedParameter,
     Parameter,
     SerializableModel,
     classproperty,
+    normalize,
 )
-from kilroy_server_py_utils import Categorizable, normalize
 
-from kilroy_face_discord.processors import (
-    ImageOnlyProcessor,
-    ImageWithOptionalTextProcessor,
-    Processor,
-    TextAndImageProcessor,
-    TextOnlyProcessor,
-    TextOrImageProcessor,
-    TextWithOptionalImageProcessor,
-)
+from kilroy_face_discord.processors import Processor
 from kilroy_face_discord.scorers import Scorer
 from kilroy_face_discord.scrapers import Scraper
 
@@ -43,7 +28,6 @@ from kilroy_face_discord.scrapers import Scraper
 class DiscordFaceParams(SerializableModel):
     token: str
     channel_id: int
-    processor_params: Dict[str, Dict[str, Any]] = {}
     scoring_type: str
     scorers_params: Dict[str, Dict[str, Any]] = {}
     scraping_type: str
@@ -98,20 +82,11 @@ class DiscordFace(Categorizable, Face[DiscordFaceState], ABC):
         return Processor.for_category(self.post_type).post_schema
 
     @classproperty
-    @abstractmethod
-    def processor_parameter(self) -> Parameter:
-        pass
-
-    @classproperty
     def parameters(cls) -> Set[Parameter]:
-        return {
-            cls.processor_parameter,
-            ScorerParameter(),
-            ScraperParameter(),
-        }
+        return {ScorerParameter(), ScraperParameter()}
 
     @staticmethod
-    async def _build_app(params: DiscordFaceParams) -> RESTApp:
+    async def _build_app() -> RESTApp:
         return RESTApp()
 
     @staticmethod
@@ -132,15 +107,8 @@ class DiscordFace(Categorizable, Face[DiscordFaceState], ABC):
         return channel
 
     @classmethod
-    async def _build_processor(cls, params: DiscordFaceParams) -> Processor:
-        processor_cls = Processor.for_category(cls.post_type)
-        processor_params = params.processor_params.get(cls.post_type, {})
-        if issubclass(processor_cls, Configurable):
-            optimizer = await processor_cls.build(**processor_params)
-            await optimizer.init()
-        else:
-            optimizer = processor_cls(**processor_params)
-        return optimizer
+    async def _build_processor(cls) -> Processor:
+        return Processor.for_category(cls.post_type)()
 
     @staticmethod
     async def _build_scorer(params: DiscordFaceParams) -> Scorer:
@@ -166,12 +134,12 @@ class DiscordFace(Categorizable, Face[DiscordFaceState], ABC):
 
     async def build_default_state(self) -> DiscordFaceState:
         params = DiscordFaceParams(**self._kwargs)
-        app = await self._build_app(params)
+        app = await self._build_app()
         client = await self._build_client(params, app)
 
         return DiscordFaceState(
             token=params.token,
-            processor=await self._build_processor(params),
+            processor=await self._build_processor(),
             scorer=await self._build_scorer(params),
             scorers_params=params.scorers_params,
             scraper=await self._build_scraper(params),
@@ -226,66 +194,24 @@ class DiscordFace(Categorizable, Face[DiscordFaceState], ABC):
 
 
 class TextOnlyDiscordFace(DiscordFace):
-    @classproperty
-    def processor_parameter(self) -> Parameter:
-        class ProcessorParameter(
-            NestedParameter[DiscordFaceState, TextOnlyProcessor]
-        ):
-            pass
-
-        return ProcessorParameter()
+    pass
 
 
 class ImageOnlyDiscordFace(DiscordFace):
-    @classproperty
-    def processor_parameter(self) -> Parameter:
-        class ProcessorParameter(
-            NestedParameter[DiscordFaceState, ImageOnlyProcessor]
-        ):
-            pass
-
-        return ProcessorParameter()
+    pass
 
 
 class TextAndImageDiscordFace(DiscordFace):
-    @classproperty
-    def processor_parameter(self) -> Parameter:
-        class ProcessorParameter(
-            NestedParameter[DiscordFaceState, TextAndImageProcessor]
-        ):
-            pass
-
-        return ProcessorParameter()
+    pass
 
 
 class TextOrImageDiscordFace(DiscordFace):
-    @classproperty
-    def processor_parameter(self) -> Parameter:
-        class ProcessorParameter(
-            NestedParameter[DiscordFaceState, TextOrImageProcessor]
-        ):
-            pass
-
-        return ProcessorParameter()
+    pass
 
 
 class TextWithOptionalImageDiscordFace(DiscordFace):
-    @classproperty
-    def processor_parameter(self) -> Parameter:
-        class ProcessorParameter(
-            NestedParameter[DiscordFaceState, TextWithOptionalImageProcessor]
-        ):
-            pass
-
-        return ProcessorParameter()
+    pass
 
 
 class ImageWithOptionalTextDiscordFace(DiscordFace):
-    @classproperty
-    def processor_parameter(self) -> Parameter:
-        class ProcessorParameter(
-            NestedParameter[DiscordFaceState, ImageWithOptionalTextProcessor]
-        ):
-            pass
-
-        return ProcessorParameter()
+    pass
