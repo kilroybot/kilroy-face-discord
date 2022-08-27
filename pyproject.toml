@@ -3,7 +3,7 @@
 
 [tool.poetry]
 name = "kilroy-face-discord"
-version = "0.4.0"
+version = "0.5.0"
 description = "kilroy face for Discord 🎮"
 readme = "kilroy_face_discord/README.md"
 authors = ["kilroy <kilroymail@pm.me>"]
@@ -21,6 +21,7 @@ hikari = "2.0.0.dev109"
 aiostream = "^0.4"
 PyYAML = "^6.0"
 deepmerge = "^1.0"
+platformdirs = "^2.5"
 
 # dev
 
