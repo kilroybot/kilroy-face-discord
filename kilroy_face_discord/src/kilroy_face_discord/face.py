@@ -2,6 +2,7 @@ import json
 from abc import ABC
 from dataclasses import dataclass
 from datetime import datetime
+from functools import partial
 from pathlib import Path
 from typing import Any, AsyncIterable, Dict, Optional, Set, Tuple
 from uuid import UUID
@@ -89,123 +90,152 @@ class DiscordFace(Categorizable, Face[State], ABC):
         return RESTApp()
 
     @staticmethod
-    async def _build_client(token: str, app: RESTApp) -> RESTClientImpl:
-        client = app.acquire(token, TokenType.BOT)
+    async def _build_client(params: Params, app: RESTApp) -> RESTClientImpl:
+        client = app.acquire(params.token, TokenType.BOT)
         client.start()
         return client
 
     @staticmethod
     async def _build_channel(
-        channel_id: int, client: RESTClientImpl
+        params: Params, client: RESTClientImpl
     ) -> TextableChannel:
-        channel = await client.fetch_channel(channel_id)
+        channel = await client.fetch_channel(params.channel_id)
         if not isinstance(channel, TextableChannel):
             raise ValueError("Channel is not textable.")
         return channel
 
     @classmethod
     async def _build_processor(cls) -> Processor:
-        return await cls.build_generic(Processor, category=cls.post_type)
+        return await cls._build_generic(Processor, category=cls.post_type)
 
     @classmethod
-    async def _build_scorer(
-        cls, scoring_type: str, scorers_params: Dict[str, Dict[str, Any]]
-    ) -> Scorer:
-        return await cls.build_generic(
+    async def _build_scorer(cls, params: Params) -> Scorer:
+        return await cls._build_generic(
             Scorer,
-            category=scoring_type,
-            **scorers_params.get(scoring_type, {}),
+            category=params.scoring_type,
+            **params.scorers_params.get(params.scoring_type, {}),
         )
 
     @classmethod
-    async def _build_scraper(
-        cls, scraping_type: str, scrapers_params: Dict[str, Dict[str, Any]]
-    ) -> Scraper:
-        return await cls.build_generic(
+    async def _build_scraper(cls, params: Params) -> Scraper:
+        return await cls._build_generic(
             Scraper,
-            category=scraping_type,
-            **scrapers_params.get(scraping_type, {}),
+            category=params.scraping_type,
+            **params.scrapers_params.get(params.scraping_type, {}),
         )
 
-    async def build_default_state(self) -> State:
+    async def _build_default_state(self) -> State:
         params = Params(**self._kwargs)
         app = await self._build_app()
-        client = await self._build_client(params.token, app)
+        client = await self._build_client(params, app)
 
         return State(
             token=params.token,
             processor=await self._build_processor(),
-            scorer=await self._build_scorer(
-                params.scoring_type, params.scorers_params
-            ),
+            scorer=await self._build_scorer(params),
             scorers_params=params.scorers_params,
-            scraper=await self._build_scraper(
-                params.scraping_type, params.scrapers_params
-            ),
+            scraper=await self._build_scraper(params),
             scrapers_params=params.scrapers_params,
             app=app,
             client=client,
-            channel=await self._build_channel(params.channel_id, client),
+            channel=await self._build_channel(params, client),
         )
 
-    @classmethod
-    async def save_state(cls, state: State, directory: Path) -> None:
+    @staticmethod
+    async def _save_processor(state: State, directory: Path) -> None:
         if isinstance(state.processor, Savable):
-            await state.processor.save(directory)
-        if isinstance(state.scorer, Savable):
-            await state.scorer.save(directory)
-        if isinstance(state.scraper, Savable):
-            await state.scraper.save(directory)
+            await state.processor.save(directory / "processor")
 
-        state_dict = {
+    @staticmethod
+    async def _save_scorer(state: State, directory: Path) -> None:
+        if isinstance(state.scorer, Savable):
+            await state.scorer.save(directory / "scorer")
+
+    @staticmethod
+    async def _save_scraper(state: State, directory: Path) -> None:
+        if isinstance(state.scraper, Savable):
+            await state.scraper.save(directory / "scraper")
+
+    @staticmethod
+    async def _create_state_dict(state: State) -> Dict[str, Any]:
+        return {
             "processor_type": state.processor.category,
             "scoring_type": state.scorer.category,
             "scrapers_params": state.scrapers_params,
             "scorers_params": state.scorers_params,
             "scraping_type": state.scraper.category,
-            "channel_id": state.channel.id,
         }
 
+    @staticmethod
+    async def _save_state_dict(
+        state_dict: Dict[str, Any], directory: Path
+    ) -> None:
         with open(directory / "state.json", "w") as f:
             json.dump(state_dict, f)
 
-    async def load_saved_state(self, directory: Path) -> State:
-        with open(directory / "state.json", "r") as f:
-            state_dict = json.load(f)
+    @classmethod
+    async def _save_state(cls, state: State, directory: Path) -> None:
+        await cls._save_processor(state, directory)
+        await cls._save_scorer(state, directory)
+        await cls._save_scraper(state, directory)
+        state_dict = await cls._create_state_dict(state)
+        await cls._save_state_dict(state_dict, directory)
 
+    @staticmethod
+    async def _load_state_dict(directory: Path) -> Dict[str, Any]:
+        with open(directory / "state.json", "r") as f:
+            return json.load(f)
+
+    @classmethod
+    async def _load_processor(
+        cls, directory: Path, state_dict: Dict[str, Any]
+    ) -> Processor:
+        return await cls._load_generic(
+            directory / "processor",
+            Processor,
+            category=state_dict["processor_type"],
+            default=cls._build_processor,
+        )
+
+    @classmethod
+    async def _load_scorer(
+        cls, directory: Path, state_dict: Dict[str, Any], params: Params
+    ) -> Scorer:
+        return await cls._load_generic(
+            directory / "scorer",
+            Scorer,
+            category=state_dict["scoring_type"],
+            default=partial(cls._build_scorer, params),
+        )
+
+    @classmethod
+    async def _load_scraper(
+        cls, directory: Path, state_dict: Dict[str, Any], params: Params
+    ) -> Scraper:
+        return await cls._load_generic(
+            directory / "scraper",
+            Scraper,
+            category=state_dict["scraping_type"],
+            default=partial(cls._build_scraper, params),
+        )
+
+    async def _load_saved_state(self, directory: Path) -> State:
+        state_dict = await self._load_state_dict(directory)
         params = Params(**self._kwargs)
 
         app = await self._build_app()
-        client = await self._build_client(params.token, app)
+        client = await self._build_client(params, app)
 
         return State(
             token=params.token,
-            processor=await self.load_generic(
-                directory, Processor, category=state_dict["processor_type"]
-            ),
-            scorer=await self.load_generic(
-                directory,
-                Scorer,
-                category=state_dict["scoring_type"],
-                **state_dict["scorers_params"].get(
-                    state_dict["scoring_type"], {}
-                ),
-            ),
+            processor=await self._load_processor(directory, state_dict),
+            scorer=await self._load_scorer(directory, state_dict, params),
             scorers_params=state_dict["scorers_params"],
-            scraper=await self.load_generic(
-                directory,
-                Scraper,
-                category=state_dict["scraping_type"],
-                **state_dict["scrapers_params"].get(
-                    state_dict["scraping_type"], {}
-                ),
-            ),
+            scraper=await self._load_scraper(directory, state_dict, params),
             scrapers_params=state_dict["scrapers_params"],
             app=app,
             client=client,
-            channel=await self._build_channel(
-                state_dict["channel_id"], client
-            ),
+            channel=await self._build_channel(params, client),
         )
 
     async def cleanup(self) -> None:
