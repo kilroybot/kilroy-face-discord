@@ -1,9 +1,10 @@
-faceType: textOrImage
-faceParams:
+# default configuration
+face_type: textOrImage
+face:
   token: XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
-  channelId: XXXXXXXXXXXXXXXXXX
-  scoringType: reactions
-  scrapingType: basic
-serverParams:
-  host: localhost
+  channel_id: XXXXXXXXXXXXXXXXXX
+  scoring_type: reactions
+  scraping_type: basic
+server:
+  host: "0.0.0.0"
   port: 10000
