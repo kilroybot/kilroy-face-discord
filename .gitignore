@@ -130,5 +130,7 @@ dmypy.json
 
 .idea/
 
-/config.yaml
-/kilroy_face_discord/config.yaml
+!.gitkeep
+
+/config*.yaml
+/kilroy_face_discord/config*.yaml
