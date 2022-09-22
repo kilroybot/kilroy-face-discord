@@ -1,4 +1,5 @@
 import json
+import logging
 from abc import ABC
 from dataclasses import dataclass
 from datetime import datetime
@@ -27,6 +28,8 @@ from kilroy_face_server_py_sdk import (
 from kilroy_face_discord.processors import Processor
 from kilroy_face_discord.scorers import Scorer
 from kilroy_face_discord.scrapers import Scraper
+
+logger = logging.getLogger(__name__)
 
 
 class Params(SerializableModel):
@@ -243,13 +246,23 @@ class DiscordFace(Categorizable, Face[State], ABC):
             await state.client.close()
 
     async def post(self, post: Dict[str, Any]) -> UUID:
+        logger.info("Creating new post...")
+
         async with self.state.read_lock() as state:
-            return await state.processor.post(state.channel, post)
+            post_id = await state.processor.post(state.channel, post)
+
+        logger.info(f"New post id: {str(post_id)}.")
+        return post_id
 
     async def score(self, post_id: UUID) -> float:
+        logger.info(f"Scoring post {str(post_id)}...")
+
         async with self.state.read_lock() as state:
             message = await state.channel.fetch_message(post_id.int)
-            return await state.scorer.score(message)
+            score = await state.scorer.score(message)
+
+        logger.info(f"Score for post {str(post_id)}: {score}.")
+        return score
 
     async def _fetch(
         self,
@@ -289,9 +302,14 @@ class DiscordFace(Categorizable, Face[State], ABC):
         else:
             posts = stream.iterate(posts)
 
+        logger.info("Scraping posts...")
+
         async with posts.stream() as streamer:
             async for post_id, post, score in streamer:
+                logger.info(f"Scraped post {str(post_id)}.")
                 yield post_id, post, score
+
+        logger.info("Scraping finished.")
 
 
 class TextOnlyDiscordFace(DiscordFace):
