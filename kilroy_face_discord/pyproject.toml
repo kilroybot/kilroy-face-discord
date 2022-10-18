@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "kilroy-face-discord"
-version = "0.6.0"
+version = "0.6.1"
 description = "kilroy face for Discord 🎮"
 readme = "README.md"
 authors = ["kilroy <kilroymail@pm.me>"]
@@ -10,7 +10,7 @@ repository = "https://github.com/kilroybot/kilroy-face-discord"
 documentation = "https://kilroybot.github.io/kilroy-face-discord"
 
 [tool.poetry.dependencies]
-python = ">=3.9,<3.11"
+python = ">=3.10,<3.11"
 pydantic =  { version = "^1.10", extras = ["dotenv"] }
 omegaconf = "^2.2"
 typer = { version = "^0.6", extras = ["all"] }
@@ -41,7 +41,7 @@ kilroy-face-discord-fetch-model = "kilroy_face_discord.toxicity:fetch_model"
 
 [tool.black]
 line-length = 79
-target-version = ['py39']
+target-version = ['py310']
 
 [tool.poe]
 verbosity = -1
