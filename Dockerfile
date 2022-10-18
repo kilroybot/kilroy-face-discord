@@ -1,9 +1,6 @@
-ARG MINICONDA_IMAGE_TAG=4.10.3-alpine
+ARG MINICONDA_IMAGE_TAG=4.10.3
 
 FROM continuumio/miniconda3:$MINICONDA_IMAGE_TAG AS base
-
-# add bash, because it's not available by default on alpine
-RUN apk add --no-cache bash
 
 WORKDIR /app/
 
@@ -44,6 +41,8 @@ COPY ./kilroy_face_discord/LICENSE ./kilroy_face_discord/README.md ./
 RUN poetry build -f wheel && \
     python -m pip install --no-deps --no-index --no-cache-dir --find-links=dist kilroy-face-discord
 
+RUN kilroy-face-discord-fetch-model
+
 # add entrypoint
 COPY ./entrypoint.sh ./entrypoint.sh
 
@@ -63,6 +62,8 @@ COPY ./kilroy_face_discord/LICENSE ./kilroy_face_discord/README.md ./
 # build wheel by poetry and install by pip (to force non-editable mode)
 RUN poetry build -f wheel && \
     python -m pip install --no-deps --no-index --no-cache-dir --find-links=dist kilroy-face-discord
+
+RUN kilroy-face-discord-fetch-model
 
 # add entrypoint
 COPY ./entrypoint.sh ./entrypoint.sh
