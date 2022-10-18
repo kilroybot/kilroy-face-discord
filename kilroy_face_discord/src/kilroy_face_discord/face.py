@@ -10,7 +10,7 @@ from uuid import UUID
 
 from aiostream import stream
 from aiostream.aiter_utils import aiter, anext
-from hikari import Message, RESTApp, TextableChannel, TokenType
+from hikari import Message, RESTApp, TextableGuildChannel, TokenType
 from hikari.impl import RESTClientImpl
 from kilroy_face_server_py_sdk import (
     Categorizable,
@@ -51,7 +51,7 @@ class State:
     scrapers_params: Dict[str, Dict[str, Any]]
     app: RESTApp
     client: Optional[RESTClientImpl]
-    channel: Optional[TextableChannel]
+    channel: Optional[TextableGuildChannel]
 
 
 class ScorerParameter(CategorizableBasedParameter[State, Scorer]):
@@ -101,9 +101,9 @@ class DiscordFace(Categorizable, Face[State], ABC):
     @staticmethod
     async def _build_channel(
         params: Params, client: RESTClientImpl
-    ) -> TextableChannel:
+    ) -> TextableGuildChannel:
         channel = await client.fetch_channel(params.channel_id)
-        if not isinstance(channel, TextableChannel):
+        if not isinstance(channel, TextableGuildChannel):
             raise ValueError("Channel is not textable.")
         return channel
 
@@ -245,14 +245,14 @@ class DiscordFace(Categorizable, Face[State], ABC):
         async with self.state.write_lock() as state:
             await state.client.close()
 
-    async def post(self, post: Dict[str, Any]) -> UUID:
+    async def post(self, post: Dict[str, Any]) -> Tuple[UUID, Optional[str]]:
         logger.info("Creating new post...")
 
         async with self.state.read_lock() as state:
-            post_id = await state.processor.post(state.channel, post)
+            post_id, post_url = await state.processor.post(state.channel, post)
 
         logger.info(f"New post id: {str(post_id)}.")
-        return post_id
+        return post_id, post_url
 
     async def score(self, post_id: UUID) -> float:
         logger.info(f"Scoring post {str(post_id)}...")
