@@ -1,10 +1,10 @@
 import json
 from abc import ABC, abstractmethod
 from base64 import urlsafe_b64decode, urlsafe_b64encode
-from typing import Any, Dict, Optional
+from typing import Any, Dict, Optional, Tuple
 from uuid import UUID
 
-from hikari import Bytes, Message, TextableChannel
+from hikari import Bytes, Message, TextableGuildChannel
 from kilroy_face_server_py_sdk import (
     Categorizable,
     ImageData,
@@ -21,9 +21,11 @@ from kilroy_face_server_py_sdk import (
 )
 
 
-async def send_message(channel: TextableChannel, *args, **kwargs) -> UUID:
+async def send_message(
+    channel: TextableGuildChannel, *args, **kwargs
+) -> Tuple[UUID, str]:
     message = await channel.send(*args, **kwargs)
-    return UUID(int=message.id)
+    return UUID(int=message.id), message.make_link(channel.guild_id)
 
 
 async def get_text_data(message: Message) -> Optional[TextData]:
@@ -56,8 +58,8 @@ class Processor(Categorizable, ABC):
 
     @abstractmethod
     async def post(
-        self, channel: TextableChannel, post: Dict[str, Any]
-    ) -> UUID:
+        self, channel: TextableGuildChannel, post: Dict[str, Any]
+    ) -> Tuple[UUID, str]:
         pass
 
     @abstractmethod
@@ -79,8 +81,8 @@ class TextOnlyProcessor(Processor):
         return JSONSchema(**TextOnlyPost.schema())
 
     async def post(
-        self, channel: TextableChannel, post: Dict[str, Any]
-    ) -> UUID:
+        self, channel: TextableGuildChannel, post: Dict[str, Any]
+    ) -> Tuple[UUID, str]:
         post = TextOnlyPost.parse_obj(post)
         return await send_message(channel, post.text.content)
 
@@ -99,8 +101,8 @@ class ImageOnlyProcessor(Processor):
         return JSONSchema(**ImageOnlyPost.schema())
 
     async def post(
-        self, channel: TextableChannel, post: Dict[str, Any]
-    ) -> UUID:
+        self, channel: TextableGuildChannel, post: Dict[str, Any]
+    ) -> Tuple[UUID, str]:
         post = ImageOnlyPost.parse_obj(post)
         image = image_to_bytes(post.image)
         return await send_message(channel, image)
@@ -120,8 +122,8 @@ class TextAndImageProcessor(Processor):
         return JSONSchema(**TextAndImagePost.schema())
 
     async def post(
-        self, channel: TextableChannel, post: Dict[str, Any]
-    ) -> UUID:
+        self, channel: TextableGuildChannel, post: Dict[str, Any]
+    ) -> Tuple[UUID, str]:
         post = TextAndImagePost.parse_obj(post)
         image = image_to_bytes(post.image)
         return await send_message(channel, post.text.content, attachment=image)
@@ -142,8 +144,8 @@ class TextOrImageProcessor(Processor):
         return JSONSchema(**TextOrImagePost.schema())
 
     async def post(
-        self, channel: TextableChannel, post: Dict[str, Any]
-    ) -> UUID:
+        self, channel: TextableGuildChannel, post: Dict[str, Any]
+    ) -> Tuple[UUID, str]:
         post = TextOrImagePost.parse_obj(post)
         kwargs = {}
         if post.text is not None:
@@ -168,8 +170,8 @@ class TextWithOptionalImageProcessor(Processor):
         return JSONSchema(**TextWithOptionalImagePost.schema())
 
     async def post(
-        self, channel: TextableChannel, post: Dict[str, Any]
-    ) -> UUID:
+        self, channel: TextableGuildChannel, post: Dict[str, Any]
+    ) -> Tuple[UUID, str]:
         post = TextWithOptionalImagePost.parse_obj(post)
         kwargs = {}
         if post.image is not None:
@@ -192,8 +194,8 @@ class ImageWithOptionalTextProcessor(Processor):
         return JSONSchema(**ImageWithOptionalTextPost.schema())
 
     async def post(
-        self, channel: TextableChannel, post: Dict[str, Any]
-    ) -> UUID:
+        self, channel: TextableGuildChannel, post: Dict[str, Any]
+    ) -> Tuple[UUID, str]:
         post = ImageWithOptionalTextPost.parse_obj(post)
         kwargs = {}
         if post.image is not None:
