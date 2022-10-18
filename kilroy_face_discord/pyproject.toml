@@ -14,10 +14,12 @@ python = ">=3.9,<3.11"
 pydantic =  { version = "^1.10", extras = ["dotenv"] }
 omegaconf = "^2.2"
 typer = { version = "^0.6", extras = ["all"] }
-kilroy-face-server-py-sdk = "~0.7"
+kilroy-face-server-py-sdk = "~0.8"
 hikari = "2.0.0.dev109"
 aiostream = "^0.4"
 platformdirs = "^2.5"
+detoxify = "^0.5"
+numpy = "^1.23"
 
 [tool.poetry.group.poe.dependencies]
 poethepoet = "^0.16"
