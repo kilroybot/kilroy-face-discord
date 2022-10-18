@@ -24,9 +24,11 @@ from kilroy_face_server_py_sdk import (
     classproperty,
     normalize,
 )
+from kilroy_server_py_utils import CategorizableBasedOptionalParameter
 
 from kilroy_face_discord.processors import Processor
-from kilroy_face_discord.scorers import Scorer
+from kilroy_face_discord.scoring.modifiers import ScoreModifier
+from kilroy_face_discord.scoring.raw import Scorer
 from kilroy_face_discord.scrapers import Scraper
 
 logger = logging.getLogger(__name__)
@@ -35,9 +37,11 @@ logger = logging.getLogger(__name__)
 class Params(SerializableModel):
     token: str
     channel_id: int
-    scoring_type: str
+    scoring_type: str = "reactions"
     scorers_params: Dict[str, Dict[str, Any]] = {}
-    scraping_type: str
+    score_modifier_type: Optional[str] = None
+    score_modifiers_params: Dict[str, Any] = {}
+    scraping_type: str = "basic"
     scrapers_params: Dict[str, Dict[str, Any]] = {}
 
 
@@ -47,6 +51,8 @@ class State:
     processor: Processor
     scorer: Scorer
     scorers_params: Dict[str, Dict[str, Any]]
+    score_modifier: Optional[ScoreModifier]
+    score_modifiers_params: Dict[str, Dict[str, Any]]
     scraper: Scraper
     scrapers_params: Dict[str, Dict[str, Any]]
     app: RESTApp
@@ -57,6 +63,13 @@ class State:
 class ScorerParameter(CategorizableBasedParameter[State, Scorer]):
     async def _get_params(self, state: State, category: str) -> Dict[str, Any]:
         return {**state.scorers_params.get(category, {})}
+
+
+class ScoreModifierParameter(
+    CategorizableBasedOptionalParameter[State, ScoreModifier]
+):
+    async def _get_params(self, state: State, category: str) -> Dict[str, Any]:
+        return {**state.score_modifiers_params.get(category, {})}
 
 
 class ScraperParameter(CategorizableBasedParameter[State, Scraper]):
@@ -86,7 +99,11 @@ class DiscordFace(Categorizable, Face[State], ABC):
 
     @classproperty
     def parameters(cls) -> Set[Parameter]:
-        return {ScorerParameter(), ScraperParameter()}
+        return {
+            ScorerParameter(),
+            ScoreModifierParameter(),
+            ScraperParameter(),
+        }
 
     @staticmethod
     async def _build_app() -> RESTApp:
@@ -120,6 +137,20 @@ class DiscordFace(Categorizable, Face[State], ABC):
         )
 
     @classmethod
+    async def _build_score_modifier(
+        cls, params: Params
+    ) -> Optional[ScoreModifier]:
+        if params.score_modifier_type is None:
+            return None
+        return await cls._build_generic(
+            ScoreModifier,
+            category=params.score_modifier_type,
+            **params.score_modifiers_params.get(
+                params.score_modifier_type, {}
+            ),
+        )
+
+    @classmethod
     async def _build_scraper(cls, params: Params) -> Scraper:
         return await cls._build_generic(
             Scraper,
@@ -137,6 +168,8 @@ class DiscordFace(Categorizable, Face[State], ABC):
             processor=await self._build_processor(),
             scorer=await self._build_scorer(params),
             scorers_params=params.scorers_params,
+            score_modifier=await self._build_score_modifier(params),
+            score_modifiers_params=params.score_modifiers_params,
             scraper=await self._build_scraper(params),
             scrapers_params=params.scrapers_params,
             app=app,
@@ -155,6 +188,11 @@ class DiscordFace(Categorizable, Face[State], ABC):
             await state.scorer.save(directory / "scorer")
 
     @staticmethod
+    async def _save_score_modifier(state: State, directory: Path) -> None:
+        if isinstance(state.score_modifier, Savable):
+            await state.score_modifier.save(directory / "score_modifier")
+
+    @staticmethod
     async def _save_scraper(state: State, directory: Path) -> None:
         if isinstance(state.scraper, Savable):
             await state.scraper.save(directory / "scraper")
@@ -164,9 +202,13 @@ class DiscordFace(Categorizable, Face[State], ABC):
         return {
             "processor_type": state.processor.category,
             "scoring_type": state.scorer.category,
-            "scrapers_params": state.scrapers_params,
-            "scorers_params": state.scorers_params,
+            "score_modifier_type": state.score_modifier.category
+            if state.score_modifier is not None
+            else None,
             "scraping_type": state.scraper.category,
+            "scorers_params": state.scorers_params,
+            "score_modifiers_params": state.score_modifiers_params,
+            "scrapers_params": state.scrapers_params,
         }
 
     @staticmethod
@@ -180,6 +222,7 @@ class DiscordFace(Categorizable, Face[State], ABC):
     async def _save_state(cls, state: State, directory: Path) -> None:
         await cls._save_processor(state, directory)
         await cls._save_scorer(state, directory)
+        await cls._save_score_modifier(state, directory)
         await cls._save_scraper(state, directory)
         state_dict = await cls._create_state_dict(state)
         await cls._save_state_dict(state_dict, directory)
@@ -212,6 +255,19 @@ class DiscordFace(Categorizable, Face[State], ABC):
         )
 
     @classmethod
+    async def _load_score_modifier(
+        cls, directory: Path, state_dict: Dict[str, Any], params: Params
+    ) -> Optional[ScoreModifier]:
+        if state_dict.get("score_modifier_type") is None:
+            return None
+        return await cls._load_generic(
+            directory / "score_modifier",
+            ScoreModifier,
+            category=state_dict["score_modifier_type"],
+            default=partial(cls._build_score_modifier, params),
+        )
+
+    @classmethod
     async def _load_scraper(
         cls, directory: Path, state_dict: Dict[str, Any], params: Params
     ) -> Scraper:
@@ -234,6 +290,10 @@ class DiscordFace(Categorizable, Face[State], ABC):
             processor=await self._load_processor(directory, state_dict),
             scorer=await self._load_scorer(directory, state_dict, params),
             scorers_params=state_dict["scorers_params"],
+            score_modifier=await self._load_score_modifier(
+                directory, state_dict, params
+            ),
+            score_modifiers_params=state_dict["score_modifiers_params"],
             scraper=await self._load_scraper(directory, state_dict, params),
             scrapers_params=state_dict["scrapers_params"],
             app=app,
@@ -260,6 +320,8 @@ class DiscordFace(Categorizable, Face[State], ABC):
         async with self.state.read_lock() as state:
             message = await state.channel.fetch_message(post_id.int)
             score = await state.scorer.score(message)
+            if state.score_modifier is not None:
+                score = await state.score_modifier.modify(message, score)
 
         logger.info(f"Score for post {str(post_id)}: {score}.")
         return score
@@ -279,6 +341,8 @@ class DiscordFace(Categorizable, Face[State], ABC):
 
                 post_id = UUID(int=message.id)
                 score = await state.scorer.score(message)
+                if state.score_modifier is not None:
+                    score = await state.score_modifier.modify(message, score)
 
                 try:
                     post = await state.processor.convert(message)
