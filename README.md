@@ -15,9 +15,9 @@ kilroy face for Discord 🎮
 
 This `README` provides info about the development process.
 
-For more info about the package itself
-see `kilroy_face_discord/README.md`
-or [docs](https://kilroybot.github.io/kilroy-face-discord).
+For more info about the package itself see
+[package `README`](kilroy_face_discord/README.md) or
+[docs](https://kilroybot.github.io/kilroy-face-discord).
 
 ## Quickstart (on Ubuntu)
 
