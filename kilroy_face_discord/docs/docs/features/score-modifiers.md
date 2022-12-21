@@ -1,7 +1,6 @@
 # Score modifiers
 
-Score modifiers are a way to modify the score of a post,
-independent of the score given by the scorer.
+Score modifiers are a way to modify the score of a post given by the scorer.
 This can be useful to constraint the score to a certain range,
 or to reduce the score of risky posts.
 Their usage is optional.
