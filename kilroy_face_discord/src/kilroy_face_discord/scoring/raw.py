@@ -5,6 +5,7 @@ from kilroy_face_server_py_sdk import Categorizable, classproperty, normalize
 
 
 class Scorer(Categorizable, ABC):
+    # noinspection PyMethodParameters
     @classproperty
     def category(cls) -> str:
         name: str = cls.__name__

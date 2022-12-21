@@ -11,10 +11,11 @@ from kilroy_face_py_shared import SerializableModel
 from kilroy_face_server_py_sdk import Categorizable, classproperty, normalize
 from kilroy_server_py_utils import Configurable, Parameter, background
 
-from kilroy_face_discord.toxicity import load_model
+from kilroy_face_discord.models import ToxicityModelLoader
 
 
 class ScoreModifier(Categorizable, ABC):
+    # noinspection PyMethodParameters
     @classproperty
     def category(cls) -> str:
         name: str = cls.__name__
@@ -44,6 +45,7 @@ class ToxicityScoreModifier(
     ScoreModifier, Configurable[ToxicityScoreModifierState]
 ):
     class ThresholdParameter(Parameter[ToxicityScoreModifierState, float]):
+        # noinspection PyMethodParameters
         @classproperty
         def schema(cls) -> Dict[str, Any]:
             return {
@@ -55,6 +57,7 @@ class ToxicityScoreModifier(
             }
 
     class AlphaParameter(Parameter[ToxicityScoreModifierState, float]):
+        # noinspection PyMethodParameters
         @classproperty
         def schema(cls) -> Dict[str, Any]:
             return {
@@ -68,7 +71,7 @@ class ToxicityScoreModifier(
     async def _build_default_state(self) -> ToxicityScoreModifierState:
         params = ToxicityScoreModifierParams(**self._kwargs)
         return ToxicityScoreModifierState(
-            detoxify=await background(load_model),
+            detoxify=await background(ToxicityModelLoader.get),
             threshold=params.threshold,
             alpha=params.alpha,
         )
@@ -91,10 +94,13 @@ class ToxicityScoreModifier(
         with open(directory / "state.json", "r") as f:
             state_dict = json.load(f)
         return ToxicityScoreModifierState(
-            detoxify=await background(load_model),
+            detoxify=await background(ToxicityModelLoader.get),
             threshold=state_dict.get("threshold", params.threshold),
             alpha=state_dict.get("alpha", params.alpha),
         )
+
+    async def cleanup(self) -> None:
+        await background(ToxicityModelLoader.release)
 
     async def modify(self, message: Message, score: float) -> float:
         async with self.state.read_lock() as state:
