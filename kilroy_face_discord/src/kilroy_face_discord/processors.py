@@ -1,10 +1,7 @@
 import json
 from abc import ABC, abstractmethod
-from base64 import urlsafe_b64decode, urlsafe_b64encode
-from typing import Any, Dict, Optional, Tuple
-from uuid import UUID
+from typing import Any, Dict
 
-from hikari import Bytes, Message, TextableGuildChannel
 from kilroy_face_server_py_sdk import (
     Categorizable,
     ImageData,
@@ -20,52 +17,25 @@ from kilroy_face_server_py_sdk import (
     normalize,
 )
 
-
-async def send_message(
-    channel: TextableGuildChannel, *args, **kwargs
-) -> Tuple[UUID, str]:
-    message = await channel.send(*args, **kwargs)
-    return UUID(int=message.id), message.make_link(channel.guild_id)
-
-
-async def get_text_data(message: Message) -> Optional[TextData]:
-    if message.content is None:
-        return None
-    return TextData(content=message.content)
-
-
-async def get_image_data(message: Message) -> Optional[ImageData]:
-    if not message.attachments:
-        return None
-    attachment = message.attachments[0]
-    image_bytes = await attachment.read()
-    encoded_image_bytes = urlsafe_b64encode(image_bytes).decode("ascii")
-    return ImageData(raw=encoded_image_bytes, filename=attachment.filename)
-
-
-def image_to_bytes(image: ImageData) -> Bytes:
-    return Bytes(
-        urlsafe_b64decode(image.raw.encode("ascii")),
-        image.filename,
-    )
+from kilroy_face_discord.post import PostData, PostTextData, PostImageData
 
 
 class Processor(Categorizable, ABC):
+    # noinspection PyMethodParameters
     @classproperty
     def category(cls) -> str:
         name: str = cls.__name__
         return normalize(name.removesuffix("Processor"))
 
     @abstractmethod
-    async def post(
-        self, channel: TextableGuildChannel, post: Dict[str, Any]
-    ) -> Tuple[UUID, str]:
+    async def to_external(self, data: PostData) -> Dict[str, Any]:
         pass
 
     @abstractmethod
-    async def convert(self, message: Message) -> Dict[str, Any]:
+    async def to_internal(self, data: Dict[str, Any]) -> PostData:
         pass
 
+    # noinspection PyMethodParameters
     @classproperty
     @abstractmethod
     def post_schema(cls) -> JSONSchema:
@@ -76,134 +46,154 @@ class Processor(Categorizable, ABC):
 
 
 class TextOnlyProcessor(Processor):
+    # noinspection PyMethodParameters
     @classproperty
     def post_schema(cls) -> JSONSchema:
         return JSONSchema(**TextOnlyPost.schema())
 
-    async def post(
-        self, channel: TextableGuildChannel, post: Dict[str, Any]
-    ) -> Tuple[UUID, str]:
-        post = TextOnlyPost.parse_obj(post)
-        return await send_message(channel, post.text.content)
-
-    async def convert(self, message: Message) -> Dict[str, Any]:
-        text = await get_text_data(message)
-        post = TextOnlyPost(text=text)
+    async def to_external(self, data: PostData) -> Dict[str, Any]:
+        post = TextOnlyPost(text=TextData(content=data.text.content))
         return json.loads(post.json())
+
+    async def to_internal(self, data: Dict[str, Any]) -> PostData:
+        post = TextOnlyPost.parse_obj(data)
+        return PostData(text=PostTextData(content=post.text.content))
 
 
 # Image only
 
 
 class ImageOnlyProcessor(Processor):
+    # noinspection PyMethodParameters
     @classproperty
     def post_schema(cls) -> JSONSchema:
         return JSONSchema(**ImageOnlyPost.schema())
 
-    async def post(
-        self, channel: TextableGuildChannel, post: Dict[str, Any]
-    ) -> Tuple[UUID, str]:
-        post = ImageOnlyPost.parse_obj(post)
-        image = image_to_bytes(post.image)
-        return await send_message(channel, image)
-
-    async def convert(self, message: Message) -> Dict[str, Any]:
-        image = await get_image_data(message)
-        post = ImageOnlyPost(image=image)
+    async def to_external(self, data: PostData) -> Dict[str, Any]:
+        post = ImageOnlyPost(
+            image=ImageData(raw=data.image.raw, filename=data.image.filename)
+        )
         return json.loads(post.json())
+
+    async def to_internal(self, data: Dict[str, Any]) -> PostData:
+        post = ImageOnlyPost.parse_obj(data)
+        return PostData(
+            image=PostImageData(
+                raw=post.image.raw, filename=post.image.filename
+            )
+        )
 
 
 # Text and image
 
 
 class TextAndImageProcessor(Processor):
+    # noinspection PyMethodParameters
     @classproperty
     def post_schema(cls) -> JSONSchema:
         return JSONSchema(**TextAndImagePost.schema())
 
-    async def post(
-        self, channel: TextableGuildChannel, post: Dict[str, Any]
-    ) -> Tuple[UUID, str]:
-        post = TextAndImagePost.parse_obj(post)
-        image = image_to_bytes(post.image)
-        return await send_message(channel, post.text.content, attachment=image)
-
-    async def convert(self, message: Message) -> Dict[str, Any]:
-        text = await get_text_data(message)
-        image = await get_image_data(message)
-        post = TextAndImagePost(text=text, image=image)
+    async def to_external(self, data: PostData) -> Dict[str, Any]:
+        post = TextAndImagePost(
+            text=TextData(content=data.text.content),
+            image=ImageData(raw=data.image.raw, filename=data.image.filename),
+        )
         return json.loads(post.json())
+
+    async def to_internal(self, data: Dict[str, Any]) -> PostData:
+        post = TextAndImagePost.parse_obj(data)
+        return PostData(
+            text=PostTextData(content=post.text.content),
+            image=PostImageData(
+                raw=post.image.raw, filename=post.image.filename
+            ),
+        )
 
 
 # Text or image
 
 
 class TextOrImageProcessor(Processor):
+    # noinspection PyMethodParameters
     @classproperty
     def post_schema(cls) -> JSONSchema:
         return JSONSchema(**TextOrImagePost.schema())
 
-    async def post(
-        self, channel: TextableGuildChannel, post: Dict[str, Any]
-    ) -> Tuple[UUID, str]:
-        post = TextOrImagePost.parse_obj(post)
-        kwargs = {}
-        if post.text is not None:
-            kwargs["content"] = post.text.content
-        if post.image is not None:
-            kwargs["attachment"] = image_to_bytes(post.image)
-        return await send_message(channel, **kwargs)
-
-    async def convert(self, message: Message) -> Dict[str, Any]:
-        text = await get_text_data(message)
-        image = await get_image_data(message)
-        post = TextOrImagePost(text=text, image=image)
+    async def to_external(self, data: PostData) -> Dict[str, Any]:
+        post = TextOrImagePost(
+            text=TextData(content=data.text.content) if data.text else None,
+            image=ImageData(raw=data.image.raw, filename=data.image.filename)
+            if data.image
+            else None,
+        )
         return json.loads(post.json())
+
+    async def to_internal(self, data: Dict[str, Any]) -> PostData:
+        post = TextOrImagePost.parse_obj(data)
+        text = (
+            PostTextData(content=post.text.content)
+            if post.text is not None
+            else None
+        )
+        image = (
+            PostImageData(raw=post.image.raw, filename=post.image.filename)
+            if post.image is not None
+            else None
+        )
+        return PostData(text=text, image=image)
 
 
 # Text with optional image
 
 
 class TextWithOptionalImageProcessor(Processor):
+    # noinspection PyMethodParameters
     @classproperty
     def post_schema(cls) -> JSONSchema:
         return JSONSchema(**TextWithOptionalImagePost.schema())
 
-    async def post(
-        self, channel: TextableGuildChannel, post: Dict[str, Any]
-    ) -> Tuple[UUID, str]:
-        post = TextWithOptionalImagePost.parse_obj(post)
-        kwargs = {}
-        if post.image is not None:
-            kwargs["attachment"] = image_to_bytes(post.image)
-        return await send_message(channel, post.text.content, **kwargs)
-
-    async def convert(self, message: Message) -> Dict[str, Any]:
-        text = await get_text_data(message)
-        image = await get_image_data(message)
-        post = TextWithOptionalImagePost(text=text, image=image)
+    async def to_external(self, data: PostData) -> Dict[str, Any]:
+        post = TextWithOptionalImagePost(
+            text=TextData(content=data.text.content),
+            image=ImageData(raw=data.image.raw, filename=data.image.filename)
+            if data.image
+            else None,
+        )
         return json.loads(post.json())
+
+    async def to_internal(self, data: Dict[str, Any]) -> PostData:
+        post = TextWithOptionalImagePost.parse_obj(data)
+        text = PostTextData(content=post.text.content)
+        image = (
+            PostImageData(raw=post.image.raw, filename=post.image.filename)
+            if post.image is not None
+            else None
+        )
+        return PostData(text=text, image=image)
 
 
 # Image with optional text
 
 
 class ImageWithOptionalTextProcessor(Processor):
+    # noinspection PyMethodParameters
     @classproperty
     def post_schema(cls) -> JSONSchema:
         return JSONSchema(**ImageWithOptionalTextPost.schema())
 
-    async def post(
-        self, channel: TextableGuildChannel, post: Dict[str, Any]
-    ) -> Tuple[UUID, str]:
-        post = ImageWithOptionalTextPost.parse_obj(post)
-        kwargs = {}
-        if post.image is not None:
-            kwargs["attachment"] = image_to_bytes(post.image)
-        return await send_message(channel, post.text.content, **kwargs)
-
-    async def convert(self, message: Message) -> Dict[str, Any]:
-        text = await get_text_data(message)
-        image = await get_image_data(message)
-        post = ImageWithOptionalTextPost(text=text, image=image)
+    async def to_external(self, data: PostData) -> Dict[str, Any]:
+        post = ImageWithOptionalTextPost(
+            text=TextData(content=data.text.content) if data.text else None,
+            image=ImageData(raw=data.image.raw, filename=data.image.filename),
+        )
         return json.loads(post.json())
+
+    async def to_internal(self, data: Dict[str, Any]) -> PostData:
+        post = ImageWithOptionalTextPost.parse_obj(data)
+        text = (
+            PostTextData(content=post.text.content)
+            if post.text is not None
+            else None
+        )
+        image = PostImageData(raw=post.image.raw, filename=post.image.filename)
+        return PostData(text=text, image=image)

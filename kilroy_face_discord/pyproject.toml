@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "kilroy-face-discord"
-version = "0.6.1"
+version = "0.7.0"
 description = "kilroy face for Discord 🎮"
 readme = "README.md"
 authors = ["kilroy <kilroymail@pm.me>"]
@@ -14,9 +14,8 @@ python = ">=3.10,<3.11"
 pydantic =  { version = "^1.10", extras = ["dotenv"] }
 omegaconf = "^2.2"
 typer = { version = "^0.6", extras = ["all"] }
-kilroy-face-server-py-sdk = "~0.8"
+kilroy-face-server-py-sdk = "~0.9"
 hikari = "2.0.0.dev109"
-aiostream = "^0.4"
 platformdirs = "^2.5"
 detoxify = "^0.5"
 numpy = "^1.23"
@@ -36,8 +35,8 @@ mkdocs-material = "^8"
 [tool.poetry.scripts]
 # cli entry point
 kilroy-face-discord = "kilroy_face_discord.__main__:cli"
-# fetch model
-kilroy-face-discord-fetch-model = "kilroy_face_discord.toxicity:fetch_model"
+# fetch models
+kilroy-face-discord-fetch-models = "kilroy_face_discord.models:fetch_models"
 
 [tool.black]
 line-length = 79
@@ -119,9 +118,9 @@ help = "Build and run the docker image for tests"
 ref = "run-docker-tests"
 deps = ["build-docker-tests"]
 
-[tool.poe.tasks.fetch-model]
-help = "Fetch the toxicity model"
-cmd = "kilroy-face-discord-fetch-model"
+[tool.poe.tasks.fetch-models]
+help = "Fetch all used models"
+cmd = "kilroy-face-discord-fetch-models"
 
 [build-system]
 # this should be there, see https://python-poetry.org/docs/pyproject/#poetry-and-pep-517
