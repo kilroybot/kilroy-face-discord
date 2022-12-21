@@ -3,7 +3,6 @@
 Processors are a way to handle different types of messages.
 They are able to convert between
 internal and external representations of messages.
-They are responsible for sending messages to the Discord API.
 
 There are multiple types of processors available,
 each supporting a different type of message:
