@@ -2,7 +2,7 @@ from abc import ABC, abstractmethod
 from datetime import datetime
 from typing import AsyncIterable, Optional
 
-from hikari import Message, TextableGuildChannel, UNDEFINED
+from hikari import Message, TextableGuildChannel, UNDEFINED, MessageType
 from kilroy_face_server_py_sdk import Categorizable, classproperty, normalize
 
 
@@ -37,5 +37,8 @@ class BasicScraper(Scraper):
             before=before or UNDEFINED, after=after or UNDEFINED
         )
         async for message in history:
-            if not message.author.is_bot:
-                yield message
+            if message.type is not MessageType.DEFAULT:
+                continue
+            if message.author.is_bot:
+                continue
+            yield message
