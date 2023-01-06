@@ -1,6 +1,7 @@
 from abc import ABC, abstractmethod
 
-from hikari import Message
+from hikari import Message, RESTGuild, TextableGuildChannel
+from hikari.impl import RESTClientImpl
 from kilroy_face_server_py_sdk import Categorizable, classproperty, normalize
 
 
@@ -12,13 +13,27 @@ class Scorer(Categorizable, ABC):
         return normalize(name.removesuffix("Scorer"))
 
     @abstractmethod
-    async def score(self, message: Message) -> float:
+    async def score(
+        self,
+        client: RESTClientImpl,
+        guild: RESTGuild,
+        channel: TextableGuildChannel,
+        message: Message,
+    ) -> float:
         pass
 
 
 # Reactions
 
 
-class ReactionsScorer(Scorer):
-    async def score(self, message: Message) -> float:
-        return sum(reaction.count for reaction in message.reactions)
+class RelativeReactionsScorer(Scorer):
+    async def score(
+        self,
+        client: RESTClientImpl,
+        guild: RESTGuild,
+        channel: TextableGuildChannel,
+        message: Message,
+    ) -> float:
+        reactions = sum(reaction.count for reaction in message.reactions)
+        members = guild.approximate_member_count
+        return reactions / max(members, 1)

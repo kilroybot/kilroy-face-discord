@@ -9,16 +9,8 @@ from uuid import UUID
 
 from aiostream import stream
 from aiostream.aiter_utils import aiter, anext
-from hikari import Message, RESTApp, TextableGuildChannel, TokenType
+from hikari import Message, RESTApp, TextableGuildChannel, TokenType, RESTGuild
 from hikari.impl import RESTClientImpl
-
-from kilroy_face_discord.post import Post
-from kilroy_face_discord.posters import Poster, BasicPoster
-from kilroy_face_discord.processors import Processor
-from kilroy_face_discord.restrictions import Restriction
-from kilroy_face_discord.scoring.modifiers import ScoreModifier
-from kilroy_face_discord.scoring.raw import Scorer, ReactionsScorer
-from kilroy_face_discord.scrapers import Scraper, BasicScraper
 from kilroy_face_server_py_sdk import (
     Categorizable,
     CategorizableBasedParameter,
@@ -36,6 +28,14 @@ from kilroy_server_py_utils import (
     Configurable,
 )
 
+from kilroy_face_discord.post import Post
+from kilroy_face_discord.posters import Poster, BasicPoster
+from kilroy_face_discord.processors import Processor
+from kilroy_face_discord.restrictions import Restriction
+from kilroy_face_discord.scoring.modifiers import ScoreModifier
+from kilroy_face_discord.scoring.raw import Scorer, RelativeReactionsScorer
+from kilroy_face_discord.scrapers import Scraper, BasicScraper
+
 logger = logging.getLogger(__name__)
 
 
@@ -45,7 +45,7 @@ class Params(SerializableModel):
     posting_channel_id: int
     poster_type: str = "basic"
     posters_params: Dict[str, Dict[str, Any]] = {}
-    scorer_type: str = "reactions"
+    scorer_type: str = "relativeReactions"
     scorers_params: Dict[str, Dict[str, Any]] = {}
     score_modifier_type: Optional[str] = None
     score_modifiers_params: Dict[str, Dict[str, Any]] = {}
@@ -70,9 +70,9 @@ class State:
     restriction: Optional[Restriction]
     restrictions_params: Dict[str, Dict[str, Any]]
     app: RESTApp
-    client: Optional[RESTClientImpl]
-    scraping_channel: Optional[TextableGuildChannel]
-    posting_channel: Optional[TextableGuildChannel]
+    client: RESTClientImpl
+    scraping_channel: TextableGuildChannel
+    posting_channel: TextableGuildChannel
 
 
 class PosterParameter(CategorizableBasedParameter[State, Poster]):
@@ -94,7 +94,7 @@ class ScorerParameter(CategorizableBasedParameter[State, Scorer]):
     # noinspection PyMethodParameters
     @classproperty
     def default_categorizable(cls) -> Type[Scorer]:
-        return ReactionsScorer
+        return RelativeReactionsScorer
 
 
 class ScoreModifierParameter(
@@ -218,6 +218,8 @@ class DiscordFaceBase(Face[State], ABC):
         params = Params(**self._kwargs)
         app = await self._build_app()
         client = await self._build_client(params, app)
+        scraping_channel = await self._build_scraping_channel(params, client)
+        posting_channel = await self._build_posting_channel(params, client)
 
         return State(
             token=params.token,
@@ -234,10 +236,8 @@ class DiscordFaceBase(Face[State], ABC):
             restrictions_params=params.restrictions_params,
             app=app,
             client=client,
-            scraping_channel=await self._build_scraping_channel(
-                params, client
-            ),
-            posting_channel=await self._build_posting_channel(params, client),
+            scraping_channel=scraping_channel,
+            posting_channel=posting_channel,
         )
 
     @staticmethod
@@ -406,6 +406,8 @@ class DiscordFaceBase(Face[State], ABC):
 
         app = await self._build_app()
         client = await self._build_client(params, app)
+        scraping_channel = await self._build_scraping_channel(params, client)
+        posting_channel = await self._build_posting_channel(params, client)
 
         return State(
             token=params.token,
@@ -436,10 +438,8 @@ class DiscordFaceBase(Face[State], ABC):
             ),
             app=app,
             client=client,
-            scraping_channel=await self._build_scraping_channel(
-                params, client
-            ),
-            posting_channel=await self._build_posting_channel(params, client),
+            scraping_channel=scraping_channel,
+            posting_channel=posting_channel,
         )
 
     async def cleanup(self) -> None:
@@ -504,11 +504,20 @@ class DiscordFace(DiscordFaceBase, Categorizable, ABC):
         logger.info("Creating new post...")
 
         async with self.state.read_lock() as state:
-            data = await state.processor.to_internal(content)
-            if state.restriction is not None:
-                if not await state.restriction.check(data):
-                    raise ValueError("Post is not allowed to be posted.")
-            post = await state.poster.post(state.posting_channel, data)
+            processor = state.processor
+            restriction = state.restriction
+            poster = state.poster
+            client = state.client
+            channel = state.posting_channel
+
+        data = await processor.to_internal(content)
+        if restriction is not None:
+            if not await restriction.check(data):
+                raise ValueError("Post is not allowed to be posted.")
+
+        # noinspection PyTypeChecker
+        guild: RESTGuild = await channel.fetch_guild()
+        post = await poster.post(client, guild, channel, data)
 
         logger.info(f"New post id: {str(post.id)}.")
         return post.id, post.url
@@ -517,10 +526,17 @@ class DiscordFace(DiscordFaceBase, Categorizable, ABC):
         logger.info(f"Scoring post {str(id)}...")
 
         async with self.state.read_lock() as state:
-            message = await state.posting_channel.fetch_message(id.int)
-            score = await state.scorer.score(message)
-            if state.score_modifier is not None:
-                score = await state.score_modifier.modify(message, score)
+            client = state.client
+            channel = state.posting_channel
+            scorer = state.scorer
+            score_modifier = state.score_modifier
+
+        message = await channel.fetch_message(id.int)
+        # noinspection PyTypeChecker
+        guild: RESTGuild = await channel.fetch_guild()
+        score = await scorer.score(client, guild, channel, message)
+        if score_modifier is not None:
+            score = await score_modifier.modify(message, score)
 
         logger.info(f"Score for post {str(id)}: {score}.")
         return score
@@ -533,23 +549,31 @@ class DiscordFace(DiscordFaceBase, Categorizable, ABC):
 
         while True:
             async with self.state.read_lock() as state:
-                try:
-                    message = await anext(messages)
-                except StopAsyncIteration:
-                    break
+                scorer = state.scorer
+                score_modifier = state.score_modifier
+                processor = state.processor
+                client = state.client
+                channel = state.scraping_channel
 
-                post_id = UUID(int=message.id)
-                score = await state.scorer.score(message)
-                if state.score_modifier is not None:
-                    score = await state.score_modifier.modify(message, score)
+            try:
+                message = await anext(messages)
+            except StopAsyncIteration:
+                break
 
-                try:
-                    post = await Post.from_message(message)
-                    data = await state.processor.to_external(post.data)
-                except Exception:
-                    continue
+            post_id = UUID(int=message.id)
+            # noinspection PyTypeChecker
+            guild: RESTGuild = await channel.fetch_guild()
+            score = await scorer.score(client, guild, channel, message)
+            if score_modifier is not None:
+                score = await score_modifier.modify(message, score)
 
-                yield post_id, data, score
+            try:
+                post = await Post.from_message(message)
+                data = await processor.to_external(post.data)
+            except Exception:
+                continue
+
+            yield post_id, data, score
 
     async def scrap(
         self,
@@ -558,9 +582,13 @@ class DiscordFace(DiscordFaceBase, Categorizable, ABC):
         after: Optional[datetime] = None,
     ) -> AsyncIterable[Tuple[UUID, Dict[str, Any], float]]:
         async with self.state.read_lock() as state:
-            messages = state.scraper.scrap(
-                state.scraping_channel, before, after
-            )
+            scraper = state.scraper
+            client = state.client
+            channel = state.scraping_channel
+
+        # noinspection PyTypeChecker
+        guild: RESTGuild = await channel.fetch_guild()
+        messages = scraper.scrap(client, guild, channel, before, after)
 
         posts = self._fetch(messages)
         if limit is not None:

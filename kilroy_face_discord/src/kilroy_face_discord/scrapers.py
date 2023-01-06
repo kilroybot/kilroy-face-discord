@@ -2,7 +2,14 @@ from abc import ABC, abstractmethod
 from datetime import datetime
 from typing import AsyncIterable, Optional
 
-from hikari import Message, TextableGuildChannel, UNDEFINED, MessageType
+from hikari import (
+    Message,
+    TextableGuildChannel,
+    UNDEFINED,
+    MessageType,
+    RESTGuild,
+)
+from hikari.impl import RESTClientImpl
 from kilroy_face_server_py_sdk import Categorizable, classproperty, normalize
 
 
@@ -16,6 +23,8 @@ class Scraper(Categorizable, ABC):
     @abstractmethod
     def scrap(
         self,
+        client: RESTClientImpl,
+        guild: RESTGuild,
         channel: TextableGuildChannel,
         before: Optional[datetime] = None,
         after: Optional[datetime] = None,
@@ -29,6 +38,8 @@ class Scraper(Categorizable, ABC):
 class BasicScraper(Scraper):
     async def scrap(
         self,
+        client: RESTClientImpl,
+        guild: RESTGuild,
         channel: TextableGuildChannel,
         before: Optional[datetime] = None,
         after: Optional[datetime] = None,
