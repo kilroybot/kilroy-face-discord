@@ -1,7 +1,8 @@
 from abc import ABC, abstractmethod
 from uuid import UUID
 
-from hikari import TextableGuildChannel
+from hikari import TextableGuildChannel, RESTGuild
+from hikari.impl import RESTClientImpl
 from kilroy_server_py_utils import Categorizable, classproperty, normalize
 
 from kilroy_face_discord.post import PostData, Post
@@ -16,7 +17,11 @@ class Poster(Categorizable, ABC):
 
     @abstractmethod
     async def post(
-        self, channel: TextableGuildChannel, data: PostData
+        self,
+        client: RESTClientImpl,
+        guild: RESTGuild,
+        channel: TextableGuildChannel,
+        data: PostData,
     ) -> Post:
         pass
 
@@ -26,7 +31,11 @@ class Poster(Categorizable, ABC):
 
 class BasicPoster(Poster):
     async def post(
-        self, channel: TextableGuildChannel, data: PostData
+        self,
+        client: RESTClientImpl,
+        guild: RESTGuild,
+        channel: TextableGuildChannel,
+        data: PostData,
     ) -> Post:
         kwargs = {}
         if data.text is not None:
